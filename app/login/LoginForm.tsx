@@ -65,8 +65,8 @@ export default function LoginForm() {
         }
         setIsLoading(false);
       } else {
-        router.push('/growth/my-today');
-        router.refresh();
+        // Use window.location for reliable redirect after server action
+        window.location.href = '/growth/my-today';
       }
     } catch (err: any) {
       const errorMsg = err?.message || '登录失败，请重试';
