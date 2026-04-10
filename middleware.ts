@@ -2,10 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+  let supabaseResponse = NextResponse.next({
+    request,
   });
 
   const supabase = createServerClient(
@@ -16,59 +14,62 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
-            response.cookies.set(name, value, options);
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          );
+          supabaseResponse = NextResponse.next({
+            request,
           });
-        },
-        remove(name: string, options?: Record<string, unknown>) {
-          request.cookies.delete(name);
-          response.cookies.set(name, '', { ...options, maxAge: 0 });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          );
         },
       },
     }
   );
 
+  // IMPORTANT: Do NOT add logic between createServerClient and getUser()
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
 
+  // Skip static assets and API routes
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
     pathname === '/favicon.ico' ||
     pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js)$/i)
   ) {
-    return response;
+    return supabaseResponse;
   }
 
-  // Root: Growth-safe landing only (no /dashboard)
+  // Root redirect
   if (pathname === '/') {
-    if (user) {
-      return NextResponse.redirect(new URL('/growth/my-today', request.url));
-    }
-    return NextResponse.redirect(new URL('/login', request.url));
+    const url = request.nextUrl.clone();
+    url.pathname = user ? '/growth/my-today' : '/login';
+    return NextResponse.redirect(url);
   }
 
-  const protectedPaths = ['/growth'];
-  const isProtectedPath = protectedPaths.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
-  );
-
-  const isPublicPath = pathname === '/login';
-
+  // Already logged in → redirect away from login
   if (pathname === '/login' && user) {
-    return NextResponse.redirect(new URL('/growth/my-today', request.url));
+    const url = request.nextUrl.clone();
+    url.pathname = '/growth/my-today';
+    return NextResponse.redirect(url);
   }
 
-  if (isProtectedPath && !user) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // Protected routes → redirect to login if not authenticated
+  if (pathname.startsWith('/growth') && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
   }
 
-  return response;
+  // IMPORTANT: return supabaseResponse (not a bare NextResponse.next())
+  // so that auth cookies are properly forwarded
+  return supabaseResponse;
 }
 
 export const config = {
