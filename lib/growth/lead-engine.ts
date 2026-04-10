@@ -1,4 +1,6 @@
 import { RawLeadInput, LeadGrade, SalesTier } from '@/lib/types';
+import { AIWebsiteAnalysis, CustomsTradeProfile } from '@/lib/ai/types';
+import { isApparelHSCode } from './hs-code-mapper';
 
 const STRIP_SUFFIXES = /\b(inc|llc|ltd|co|company|corp|gmbh|sa|sl|plc|group)\b\.?/g;
 
@@ -177,6 +179,109 @@ export function processLead(lead: RawLeadInput) {
   const opportunity = scoreOpportunity(lead);
   const reachability = scoreReachability(lead);
   const finalScore = computeFinalScore(quality, opportunity, reachability);
+  const grade = calculateGrade(finalScore);
+  const tier = requiredTier(grade, opportunity);
+
+  return {
+    status: 'new' as const,
+    disqualified_reason: null,
+    quality_score: quality,
+    opportunity_score: opportunity,
+    reachability_score: reachability,
+    final_score: finalScore,
+    grade,
+    tier,
+  };
+}
+
+// ── AI-Augmented Scoring ──
+
+/**
+ * Process a lead with AI-gathered intelligence.
+ * Uses the same filter as processLead, but adjusts scores based on:
+ * - AI website analysis (product fit, company type, scale)
+ * - Customs trade data (import volume, frequency, apparel HS codes)
+ * - Contact verification results
+ *
+ * Original processLead() is NOT modified — this is a pure addition.
+ */
+export function processLeadWithAI(
+  lead: RawLeadInput,
+  aiAnalysis?: AIWebsiteAnalysis | null,
+  customsSummary?: CustomsTradeProfile | null
+) {
+  // Start with baseline scoring
+  const baseline = processLead(lead);
+  if (baseline.status === 'disqualified') return baseline;
+
+  let quality = baseline.quality_score;
+  let opportunity = baseline.opportunity_score;
+  let reachability = baseline.reachability_score;
+
+  // ── AI Website Analysis Adjustments ──
+  if (aiAnalysis) {
+    // Product fit score contributes up to 30 points to opportunity
+    const fitBonus = Math.round(aiAnalysis.product_fit_score * 0.3);
+    opportunity = Math.min(100, opportunity + fitBonus);
+
+    // Company type bonus
+    if (aiAnalysis.company_type === 'brand' || aiAnalysis.company_type === 'retailer') {
+      opportunity = Math.min(100, opportunity + 10);
+    }
+
+    // Scale-based quality adjustment
+    const scaleBonus = aiAnalysis.scale_estimate === 'large' ? 15
+      : aiAnalysis.scale_estimate === 'medium' ? 10 : 5;
+    quality = Math.min(100, quality + scaleBonus);
+
+    // Confidence-based adjustment
+    if (aiAnalysis.is_apparel_company && aiAnalysis.confidence >= 80) {
+      quality = Math.min(100, quality + 10);
+    } else if (!aiAnalysis.is_apparel_company && aiAnalysis.confidence >= 60) {
+      // Penalize non-apparel companies
+      opportunity = Math.max(0, opportunity - 15);
+      quality = Math.max(0, quality - 10);
+    }
+  }
+
+  // ── Customs Trade Data Adjustments ──
+  if (customsSummary) {
+    // Active importer bonus
+    if (customsSummary.total_records > 0) {
+      opportunity = Math.min(100, opportunity + 20);
+    }
+
+    // High frequency importer
+    if (customsSummary.avg_monthly_imports >= 2) {
+      opportunity = Math.min(100, opportunity + 10);
+    }
+
+    // Apparel HS codes confirmation
+    if (customsSummary.is_apparel_importer) {
+      quality = Math.min(100, quality + 15);
+      opportunity = Math.min(100, opportunity + 15);
+    }
+
+    // High value importer
+    if (customsSummary.total_value_usd > 100000) {
+      quality = Math.min(100, quality + 10);
+    }
+  }
+
+  // Recompute final score with adjusted weights when AI data present
+  // opportunity 35%, product_fit 25%, quality 20%, reachability 20%
+  const hasAIData = !!aiAnalysis || !!customsSummary;
+  const productFitScore = aiAnalysis?.product_fit_score || 0;
+
+  const finalScore = hasAIData
+    ? Math.round(
+        opportunity * 0.35 +
+        productFitScore * 0.25 +
+        quality * 0.20 +
+        reachability * 0.20
+      )
+    : computeFinalScore(quality, opportunity, reachability);
+
   const grade = calculateGrade(finalScore);
   const tier = requiredTier(grade, opportunity);
 

@@ -52,14 +52,8 @@ export default function LoginForm() {
     const email = formData.get('email') as string;
     const mode = isLogin ? 'login' : 'register';
 
-    // 调试输出
-    console.log('submit', { mode, email });
-
     try {
       const result = isLogin ? await login(formData) : await signup(formData);
-      
-      // 调试输出
-      console.log('result', result);
 
       if (result?.error) {
         const waitSeconds = detectRateLimit(result.error);
@@ -75,7 +69,6 @@ export default function LoginForm() {
         router.refresh();
       }
     } catch (err: any) {
-      console.log('result', { error: err });
       const errorMsg = err?.message || '登录失败，请重试';
       const waitSeconds = detectRateLimit(errorMsg);
       if (waitSeconds !== null) {

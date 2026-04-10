@@ -70,6 +70,11 @@ export default function GrowthNavbar() {
   const links: { href: string; label: string; show: boolean }[] = [
     { href: '/growth/my-today', label: 'My Leads', show: isSales },
     { href: '/growth/intake', label: 'Lead Intake', show: isSales },
+    { href: '/growth/deals', label: 'Deals', show: isSales },
+    { href: '/growth/calendar', label: 'Calendar', show: isSales },
+    { href: '/growth/outreach', label: 'Outreach', show: isSales },
+    { href: '/growth/conversations', label: 'Chats', show: isSales },
+    { href: '/growth/staff-performance', label: 'Performance', show: isAdmin },
     { href: '/growth/stats', label: 'Growth Stats', show: isAdmin },
   ];
 

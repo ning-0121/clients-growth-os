@@ -1,0 +1,7 @@
+# Lead Source V1 — Seed URLs
+# One URL per line. Lines starting with # are ignored.
+#
+# Example:
+# https://everlane.com
+# https://vuoriclothing.com
+# https://outdoorvoices.com

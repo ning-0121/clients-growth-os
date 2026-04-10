@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/outreach/send",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/leads/verify",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/auto-source",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/social-engage",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

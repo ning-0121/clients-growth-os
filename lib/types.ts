@@ -148,10 +148,13 @@ export interface RawLeadInput {
   contact_email?: string;
   contact_linkedin?: string;
   instagram_handle?: string;
+  ai_analysis?: Record<string, any> | null;
 }
 
-// Lead actions
-export type LeadActionType = 'email' | 'social_outreach' | 'call' | 'reject' | 'return' | 'reply' | 'promote';
+// Lead + Deal actions
+export type LeadActionType =
+  | 'email' | 'social_outreach' | 'call' | 'reject' | 'return' | 'reply' | 'promote'
+  | 'deal_stage_advance' | 'deal_lost' | 'deal_won';
 
 export interface GrowthLeadAction {
   id: string;
@@ -163,7 +166,18 @@ export interface GrowthLeadAction {
   created_at: string;
 }
 
-export type IntakeTriggerType = 'auto_scrape' | 'test_batch' | 'api' | 'manual';
+export type IntakeTriggerType = 'auto_scrape' | 'test_batch' | 'api' | 'manual' | 'website_batch' | 'csv_upload';
+
+export interface CSVColumnMapping {
+  company_name: string | null;
+  contact_name: string | null;       // single column or "firstName+lastName" for concat
+  website: string | null;
+  contact_email: string | null;
+  contact_linkedin: string | null;
+  instagram_handle: string | null;
+  product_match: string | null;
+  source_column: string | null;       // per-row source override column (null = use default)
+}
 
 export interface IntakeRun {
   id: string;
@@ -228,4 +242,57 @@ export interface OrderDraft {
   rejected_reason: string | null;
   created_order_id: string | null;
   created_at: string;
+}
+
+// ── Seasonal Calendar ──
+
+export type Market = 'us' | 'eu' | 'jp' | 'other';
+export type CustomerType = 'retailer' | 'brand' | 'distributor' | 'other';
+export type SeasonCode = 'SS1' | 'SS2' | 'FW1' | 'FW2';
+export type SeasonalTaskType =
+  | 'product_prep' | 'book_meeting' | 'meeting' | 'submit_order' | 'production_start' | 'ship';
+
+export interface CustomerProfile {
+  id: string;
+  customer_name: string;
+  market: Market;
+  customer_type: CustomerType;
+  product_preferences: string | null;
+  notes: string | null;
+  lead_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerSeasonalConfig {
+  id: string;
+  customer_id: string;
+  season: SeasonCode;
+  is_active: boolean;
+  shelf_month_start: number | null;
+  shelf_month_end: number | null;
+  custom_prep_offset: number | null;
+  custom_meeting_offset: number | null;
+  custom_order_offset: number | null;
+  product_categories: string | null;
+  typical_order_value: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SeasonalTask {
+  id: string;
+  customer_id: string;
+  deal_id: string | null;
+  season: SeasonCode;
+  target_year: number;
+  task_type: SeasonalTaskType;
+  due_date: string;
+  completed_at: string | null;
+  assigned_to: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }

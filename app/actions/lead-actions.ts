@@ -14,6 +14,9 @@ const NEXT_ACTION_HOURS: Record<LeadActionType, number | null> = {
   promote: null,       // lead exits execution queue
   reject: null,        // exits queue
   return: null,        // exits queue
+  deal_stage_advance: null, // deal-level, not lead queue
+  deal_lost: null,          // deal-level
+  deal_won: null,           // deal-level
 };
 
 /**
@@ -258,6 +261,7 @@ export async function promoteLeadToDeal(
 
   revalidatePath('/growth/my-today');
   revalidatePath('/growth/intake');
+  revalidatePath('/growth/deals');
   revalidatePath(`/growth/leads/${leadId}`);
   return { success: true, deal_id: deal.id };
 }

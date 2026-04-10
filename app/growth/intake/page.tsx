@@ -5,6 +5,7 @@ import Link from 'next/link';
 import GrowthNavbar from '@/components/GrowthNavbar';
 import { GrowthLead, IntakeRun } from '@/lib/types';
 import BatchIntakeButton from './BatchIntakeButton';
+import IntakeTabHub from './IntakeTabHub';
 
 const GRADE_COLORS: Record<string, string> = {
   A: 'bg-green-100 text-green-800',
@@ -35,6 +36,8 @@ const TRIGGER_LABELS: Record<string, string> = {
   test_batch: '模拟导入',
   api: 'API 导入',
   manual: '手动导入',
+  website_batch: '网站批量',
+  csv_upload: 'CSV 导入',
 };
 
 export default async function IntakePage() {
@@ -94,13 +97,16 @@ export default async function IntakePage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Lead Intake</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Lead Intake Hub</h1>
             <p className="text-sm text-gray-500 mt-1">
-              线索录入、评分、分级与分配
+              统一线索入口：CSV / 网站 / 手动 / API
             </p>
           </div>
-          <BatchIntakeButton />
+          {role === '管理员' && <BatchIntakeButton />}
         </div>
+
+        {/* Unified intake hub */}
+        <IntakeTabHub />
 
         {/* Stats bar */}
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 sm:gap-4 mb-6">
