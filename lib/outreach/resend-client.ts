@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { COMPANY } from '@/lib/config/company';
 
 let client: Resend | null = null;
 
@@ -28,7 +29,7 @@ export interface SendEmailParams {
  */
 export async function sendEmail(params: SendEmailParams): Promise<{ id: string } | { error: string }> {
   const resend = getResendClient();
-  const from = params.from || 'Alex <sales@qimoclothing.com>';
+  const from = params.from || `${COMPANY.salesPerson} <${COMPANY.salesEmail}>`;
 
   try {
     const { data, error } = await resend.emails.send({
@@ -37,7 +38,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ id: string }
       subject: params.subject,
       html: params.html,
       text: params.text,
-      replyTo: params.replyTo || 'alex@qimoclothing.com',
+      replyTo: params.replyTo || COMPANY.replyToEmail,
     });
 
     if (error) {

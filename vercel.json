@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/social-engage",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/agents/outbound",
+      "schedule": "0 8,14,20 * * *"
+    },
+    {
+      "path": "/api/agents/inbound",
+      "schedule": "0 10 * * 1"
     }
   ]
 }

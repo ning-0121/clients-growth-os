@@ -3,29 +3,56 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { getOrCreateConversation, addMessage, escalateToHuman } from '@/lib/conversations/conversation-manager';
 import { generateAIReply } from '@/lib/conversations/ai-responder';
 import { sendEmail } from '@/lib/outreach/resend-client';
+import { COMPANY } from '@/lib/config/company';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function verifyShopifyHmac(body: string, hmac: string, secret: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
+  const computed = btoa(String.fromCharCode(...new Uint8Array(signature)));
+  return computed === hmac;
+}
 
 /**
  * POST /api/webhooks/shopify
  * Receives Shopify contact form submissions.
  * Generates an AI reply and sends it via email.
- *
- * Expected payload (Shopify webhook): contact form data
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
 
-    // Validate Shopify webhook (optional)
+    // Validate Shopify HMAC signature
     const hmac = request.headers.get('x-shopify-hmac-sha256');
-    // TODO: validate HMAC if SHOPIFY_WEBHOOK_SECRET is set
+    const shopifySecret = process.env.SHOPIFY_WEBHOOK_SECRET;
+    if (shopifySecret && hmac) {
+      const valid = await verifyShopifyHmac(rawBody, hmac, shopifySecret);
+      if (!valid) {
+        return NextResponse.json({ error: '签名验证失败' }, { status: 401 });
+      }
+    }
 
-    // Extract contact info from Shopify form
+    const body = JSON.parse(rawBody);
+
+    // Extract and validate contact info
     const customerEmail = body.email || body.contact?.email;
     const customerName = body.name || body.contact?.name || body.first_name;
     const messageBody = body.body || body.message || body.note || '';
 
     if (!customerEmail || !messageBody) {
-      return NextResponse.json({ error: 'Missing email or message' }, { status: 400 });
+      return NextResponse.json({ error: '缺少邮箱或消息内容' }, { status: 400 });
+    }
+
+    if (!EMAIL_REGEX.test(customerEmail)) {
+      return NextResponse.json({ error: '邮箱格式无效' }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -66,9 +93,9 @@ export async function POST(request: Request) {
     // Send reply via email
     const emailResult = await sendEmail({
       to: customerEmail,
-      subject: `Re: Your inquiry at Qimo Clothing`,
-      html: `<p>Hi ${customerName || 'there'},</p><p>${aiReply.reply_text.replace(/\n/g, '</p><p>')}</p><p>Best,<br>Alex<br>Qimo Clothing<br>eomodm.com</p>`,
-      text: `Hi ${customerName || 'there'},\n\n${aiReply.reply_text}\n\nBest,\nAlex\nQimo Clothing\neomodm.com`,
+      subject: `Re: Your inquiry at ${COMPANY.name}`,
+      html: `<p>Hi ${customerName || 'there'},</p><p>${aiReply.reply_text.replace(/\n/g, '</p><p>')}</p><p>Best,<br>${COMPANY.salesPerson}<br>${COMPANY.name}<br>${COMPANY.domain}</p>`,
+      text: `Hi ${customerName || 'there'},\n\n${aiReply.reply_text}\n\nBest,\n${COMPANY.salesPerson}\n${COMPANY.name}\n${COMPANY.domain}`,
     });
 
     // Store outbound message
