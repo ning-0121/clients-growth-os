@@ -4,8 +4,48 @@ import { runInboundPipeline } from '@/lib/agents';
 import { getAgent } from '@/lib/agents';
 
 /**
+ * GET /api/agents/inbound
+ * Vercel Cron trigger — runs weekly social media content planning.
+ */
+export async function GET(request: Request) {
+  const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: '未授权' }, { status: 401 });
+  }
+
+  try {
+    const supabase = createServiceClient();
+    const socialAgent = getAgent('social-publisher');
+
+    if (!socialAgent) {
+      return NextResponse.json({ error: 'Social agent not registered' }, { status: 500 });
+    }
+
+    // Auto-generate weekly social content for Instagram + LinkedIn
+    const results = [];
+    for (const platform of ['instagram', 'linkedin']) {
+      const result = await socialAgent.execute({
+        supabase,
+        taskId: '',
+        pipeline: 'inbound',
+        previousResults: { action: 'plan', platform },
+      });
+      results.push({ platform, ...result.data });
+    }
+
+    return NextResponse.json({ success: true, results });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error('[Inbound Cron] Error:', errorMsg);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
+  }
+}
+
+/**
  * POST /api/agents/inbound
- * Triggers inbound (宣传引流) agent actions.
+ * Manual trigger for specific inbound agent actions.
  *
  * Body: {
  *   action: "respond" | "seo_audit" | "seo_content" | "social_plan" | "social_reply",
