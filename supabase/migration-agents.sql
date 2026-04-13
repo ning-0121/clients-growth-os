@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_emails_campaign ON outreach_emails(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_emails_lead ON outreach_emails(lead_id);
 CREATE INDEX IF NOT EXISTS idx_emails_status ON outreach_emails(status);
 
--- ── Social Content (社媒内容) ──
+-- ── Social Content (社媒内容 + 审批工作流) ──
 CREATE TABLE IF NOT EXISTS social_content (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   platform TEXT NOT NULL CHECK (platform IN ('instagram', 'linkedin', 'facebook', 'tiktok')),
@@ -80,11 +80,25 @@ CREATE TABLE IF NOT EXISTS social_content (
   call_to_action TEXT,
   scheduled_at TIMESTAMPTZ,
   published_at TIMESTAMPTZ,
-  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'scheduled', 'published', 'failed')),
+  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'pending_review', 'approved', 'rejected', 'scheduled', 'published', 'failed')),
+  created_by TEXT,                       -- 创建者 (AI/人工)
+  approval_history JSONB DEFAULT '[]',   -- 审批记录 [{action, actor, notes, timestamp}]
+  rejection_reason TEXT,                 -- 拒绝原因
   engagement_count INT DEFAULT 0,
   leads_generated INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ── Lead Verification Fields (给 growth_leads 表添加验证字段) ──
+-- 运行前请确认 growth_leads 表已存在
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'growth_leads' AND column_name = 'verification_status') THEN
+    ALTER TABLE growth_leads ADD COLUMN verification_status TEXT;
+    ALTER TABLE growth_leads ADD COLUMN verification_score INT;
+    ALTER TABLE growth_leads ADD COLUMN verification_data JSONB DEFAULT '{}';
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_social_platform ON social_content(platform);
 CREATE INDEX IF NOT EXISTS idx_social_status ON social_content(status);

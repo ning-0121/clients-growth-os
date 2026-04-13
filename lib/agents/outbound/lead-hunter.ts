@@ -10,6 +10,9 @@
 import { Agent, AgentContext, AgentResult, SearchCriteria } from '../types';
 import { COMPANY } from '@/lib/config/company';
 import { analyzeStructured } from '@/lib/ai/ai-service';
+import { deduplicateBatch } from '@/lib/utils/dedup';
+import { cleanBatch } from '@/lib/utils/data-cleaner';
+import { EXCLUDE_KEYWORDS } from '@/lib/config/search-keywords';
 
 const SEARCH_PROMPT = (criteria: SearchCriteria) => `You are a B2B lead researcher for ${COMPANY.name}, a ${COMPANY.description}.
 
@@ -103,20 +106,29 @@ export const leadHunterAgent: Agent = {
         return { success: true, data: { leads: [], message: '未找到匹配的客户' }, shouldStop: true };
       }
 
-      // Deduplicate against existing leads in the database
-      const websites = result.leads
-        .map((l) => l.website)
-        .filter(Boolean);
+      // ── Step 1: 数据清洗 — 过滤垃圾数据 ──
+      const rawLeads = result.leads.map((l) => ({
+        company_name: l.company_name,
+        website: l.website,
+        instagram_handle: l.instagram,
+        contact_linkedin: l.linkedin,
+        source: 'ai_search',
+        product_match: l.products.join(', '),
+        company_type: l.company_type,
+        region: l.region,
+        fit_reason: l.fit_reason,
+        estimated_scale: l.estimated_scale,
+      }));
 
-      const { data: existing } = await context.supabase
-        .from('growth_leads')
-        .select('website')
-        .in('website', websites);
+      const { valid: cleanedLeads, rejected } = cleanBatch(rawLeads);
 
-      const existingWebsites = new Set((existing || []).map((e: { website: string }) => e.website));
-      const newLeads = result.leads.filter((l) => !existingWebsites.has(l.website));
+      // ── Step 2: 去重 — 多字段模糊匹配 ──
+      const { unique: newLeads, duplicates } = await deduplicateBatch(
+        context.supabase,
+        cleanedLeads
+      );
 
-      // Insert new leads into database
+      // ── Step 3: 入库 — 只插入清洗+去重后的数据 ──
       const insertedLeads: string[] = [];
       for (const lead of newLeads) {
         const { data: inserted } = await context.supabase
@@ -124,16 +136,19 @@ export const leadHunterAgent: Agent = {
           .insert({
             company_name: lead.company_name,
             website: lead.website,
-            instagram_handle: lead.instagram,
-            contact_linkedin: lead.linkedin,
+            instagram_handle: lead.instagram_handle,
+            contact_linkedin: lead.contact_linkedin,
+            contact_email: lead.contact_email,
             source: 'ai_search',
             status: 'new',
-            product_match: lead.products.join(', '),
+            product_match: lead.product_match,
             ai_analysis: {
-              company_type: lead.company_type,
-              region: lead.region,
-              fit_reason: lead.fit_reason,
-              estimated_scale: lead.estimated_scale,
+              company_type: (lead as Record<string, unknown>).company_type,
+              region: (lead as Record<string, unknown>).region,
+              fit_reason: (lead as Record<string, unknown>).fit_reason,
+              estimated_scale: (lead as Record<string, unknown>).estimated_scale,
+              data_quality_score: (lead as Record<string, unknown>).dataQualityScore,
+              cleaning_notes: (lead as Record<string, unknown>).cleaningNotes,
               hunted_at: new Date().toISOString(),
             },
           })
@@ -149,10 +164,18 @@ export const leadHunterAgent: Agent = {
         success: true,
         data: {
           totalFound: result.leads.length,
-          newLeads: newLeads.length,
-          duplicatesSkipped: result.leads.length - newLeads.length,
+          afterCleaning: cleanedLeads.length,
+          rejectedByCleaning: rejected.length,
+          afterDedup: newLeads.length,
+          duplicatesSkipped: duplicates.length,
+          newLeads: insertedLeads.length,
           leadIds: insertedLeads,
-          leads: newLeads,
+          rejectionReasons: rejected.map((r) => r.rejectionReason),
+          duplicateMatches: duplicates.map((d) => ({
+            company: d.lead.company_name,
+            matchType: d.match.matchType,
+            existingCompany: d.match.existingCompanyName,
+          })),
         },
         nextAgent: 'lead-classifier',
       };
