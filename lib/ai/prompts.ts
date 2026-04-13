@@ -3,6 +3,8 @@
  * Each returns a user-message string with explicit JSON schema instructions.
  */
 
+import { COMPANY } from '@/lib/config/company';
+
 export interface WebsiteContent {
   url: string;
   title: string;
@@ -16,8 +18,8 @@ export function buildWebsiteAnalysisPrompt(content: WebsiteContent): string {
   const nav = content.navItems.length > 0 ? `Navigation: ${content.navItems.join(', ')}` : '';
   const headings = content.headings.length > 0 ? `Headings: ${content.headings.join(', ')}` : '';
 
-  return `You are a B2B lead qualification analyst for a garment/apparel manufacturer based in China.
-We produce: T-shirts, hoodies, jackets, pants, dresses, polo shirts, activewear, sportswear, and custom apparel.
+  return `You are a B2B lead qualification analyst for ${COMPANY.name}, a ${COMPANY.description}.
+We produce: ${COMPANY.products.join(', ')}.
 
 Analyze this website and determine if this company would be a good B2B customer for us.
 
@@ -87,7 +89,7 @@ export function buildCompositeScorePrompt(evidence: {
   contact_linkedin?: string;
   contact_name?: string;
 }): string {
-  return `You are a B2B sales intelligence analyst for a Chinese garment manufacturer.
+  return `You are a B2B sales intelligence analyst for ${COMPANY.name}, a ${COMPANY.description}.
 Evaluate this lead and give a final recommendation.
 
 Company: ${evidence.company_name}
@@ -146,7 +148,7 @@ export function buildColdEmailPrompt(ctx: ColdEmailContext): string {
     breakup: `This is the final email in the sequence. Goal: be lighthearted, say you won't keep emailing, leave the door open. Keep it very short (2-3 sentences max). Something like "I'll stop bugging you — but if you ever need [X], I'm here."`,
   };
 
-  return `You are Alex, a sales representative at Qimo Clothing, a garment manufacturer in China specializing in activewear, sportswear, and custom apparel (ODM/OEM).
+  return `You are ${COMPANY.salesPerson}, a sales representative at ${COMPANY.name}, a ${COMPANY.description}.
 
 Write a cold outreach email to a potential B2B customer.
 
