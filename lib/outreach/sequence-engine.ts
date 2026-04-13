@@ -130,6 +130,11 @@ export async function processOutreachQueue(
     );
 
     if (!email) {
+      // Pause campaign to prevent infinite retry on AI failure
+      await supabase
+        .from('outreach_campaigns')
+        .update({ status: 'paused', updated_at: now })
+        .eq('id', campaign.id);
       result.failed++;
       continue;
     }

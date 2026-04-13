@@ -97,12 +97,25 @@ export async function POST(request: Request) {
     // Send reply via WhatsApp
     const sendResult = await sendWhatsAppMessage(fromPhone, aiReply.reply_text);
 
+    if (!sendResult.success) {
+      console.error('[WhatsApp] Send failed:', sendResult.error);
+      // Still store the attempted message for audit trail
+      await addMessage(supabase, conversation.id, {
+        direction: 'outbound',
+        sender_type: 'ai',
+        content: `[SEND FAILED] ${aiReply.reply_text}`,
+        ai_confidence: aiReply.confidence,
+      });
+      await escalateToHuman(supabase, conversation.id);
+      return NextResponse.json({ received: true, send_failed: true });
+    }
+
     // Store outbound message
     await addMessage(supabase, conversation.id, {
       direction: 'outbound',
       sender_type: 'ai',
       content: aiReply.reply_text,
-      whatsapp_message_id: sendResult.messageId,
+      whatsapp_message_id: sendResult.messageId!,
       ai_confidence: aiReply.confidence,
     });
 

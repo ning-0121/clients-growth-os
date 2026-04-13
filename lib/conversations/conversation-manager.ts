@@ -19,16 +19,15 @@ export async function getOrCreateConversation(
   customerInfo?: { name?: string; phone?: string; email?: string }
 ): Promise<ConversationInfo> {
   // Try to find existing active/escalated conversation
-  const { data: existing } = await supabase
+  const { data: existingRows } = await supabase
     .from('conversations')
     .select('id, channel, external_id, lead_id, customer_name, status')
     .eq('channel', channel)
     .eq('external_id', externalId)
     .in('status', ['active', 'escalated'])
-    .limit(1)
-    .single();
+    .limit(1);
 
-  if (existing) return existing;
+  if (existingRows && existingRows.length > 0) return existingRows[0];
 
   // Create new conversation
   const { data: created } = await supabase
@@ -51,13 +50,13 @@ export async function getOrCreateConversation(
     const matchValue = customerInfo.email || customerInfo.name || '';
 
     if (matchValue) {
-      const { data: lead } = await supabase
+      const { data: leads } = await supabase
         .from('growth_leads')
         .select('id')
         .ilike(matchField, `%${matchValue}%`)
-        .limit(1)
-        .single();
+        .limit(1);
 
+      const lead = leads?.[0];
       if (lead) {
         await supabase
           .from('conversations')
