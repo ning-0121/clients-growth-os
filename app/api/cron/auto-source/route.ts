@@ -24,8 +24,8 @@ export async function POST(request: Request) {
     const supabase = createServiceClient();
     const systemUserId = process.env.SYSTEM_USER_ID || '';
 
-    // Dequeue items from the source queue
-    const items = await dequeueItems(10, supabase);
+    // Dequeue items from the source queue (20 per hour)
+    const items = await dequeueItems(20, supabase);
 
     if (items.length === 0) {
       return NextResponse.json({ success: true, message: 'Queue empty', processed: 0 });

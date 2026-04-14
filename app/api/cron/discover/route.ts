@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { discoverLeads } from '@/lib/scrapers/google-discovery';
+import { discoverFromDDG } from '@/lib/scrapers/duckduckgo-discovery';
 
 /**
  * POST /api/cron/discover
- * Cron (every 2 hours): discovers new lead URLs from Google Search.
- * Enqueues them into lead_source_queue for enrichment.
+ * Cron (every 2 hours): discovers new lead URLs from multiple search engines.
+ * - DuckDuckGo: FREE, unlimited, runs every time (10 queries = ~100 URLs)
+ * - SerpAPI: paid, higher quality, runs 2x/day max to conserve quota
  */
 export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -15,22 +17,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!process.env.SERPAPI_KEY) {
-    return NextResponse.json({
-      success: true,
-      message: 'SERPAPI_KEY not configured. Sign up at https://serpapi.com/',
-      urls_new: 0,
-    });
-  }
-
   try {
     const supabase = createServiceClient();
+    const results: Record<string, any> = {};
 
-    const result = await discoverLeads(supabase, 8);
+    // Always run DuckDuckGo (free, unlimited)
+    try {
+      results.duckduckgo = await discoverFromDDG(supabase, 10);
+    } catch (err: any) {
+      results.duckduckgo = { error: err.message };
+    }
+
+    // Run SerpAPI only if configured, and only at hours 8 and 20 (2x/day to save quota)
+    const hour = new Date().getUTCHours();
+    const serpApiKey = process.env.SERPAPI_KEY;
+    if (serpApiKey && (hour === 8 || hour === 20)) {
+      try {
+        results.serpapi = await discoverLeads(supabase, 5); // 5 queries to conserve
+      } catch (err: any) {
+        results.serpapi = { error: err.message };
+      }
+    }
+
+    const totalNew = (results.duckduckgo?.urls_new || 0) + (results.serpapi?.urls_new || 0);
+    const totalFound = (results.duckduckgo?.urls_found || 0) + (results.serpapi?.urls_found || 0);
 
     return NextResponse.json({
       success: true,
-      ...result,
+      total_found: totalFound,
+      total_new: totalNew,
+      sources: results,
     });
   } catch (err: any) {
     console.error('[Discover Cron] Error:', err);
