@@ -25,6 +25,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/probability",
+      "schedule": "23 * * * *"
+    },
+    {
       "path": "/api/agents/outbound",
       "schedule": "0 8,14,20 * * *"
     },

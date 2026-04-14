@@ -71,6 +71,7 @@ export default function GrowthNavbar() {
     { href: '/growth/my-today', label: 'My Leads', show: isSales },
     { href: '/growth/intake', label: 'Lead Intake', show: isSales },
     { href: '/growth/deals', label: 'Deals', show: isSales },
+    { href: '/growth/probability', label: 'Probability', show: isSales },
     { href: '/growth/calendar', label: 'Calendar', show: isSales },
     { href: '/growth/outreach', label: 'Outreach', show: isSales },
     { href: '/growth/conversations', label: 'Chats', show: isSales },
