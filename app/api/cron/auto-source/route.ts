@@ -58,6 +58,16 @@ export async function POST(request: Request) {
 
         const result = results[0];
 
+        // Skip if AI says not apparel (high confidence)
+        if (result.ai_analysis && !result.ai_analysis.is_apparel_company && result.ai_analysis.confidence >= 70) {
+          await markCompleted(item.id, {
+            skipped: true,
+            reason: `AI: not apparel (confidence ${result.ai_analysis.confidence}%)`,
+            company_name: result.company_name,
+          }, supabase);
+          continue;
+        }
+
         // Convert to RawLeadInput
         const source: LeadSource = (VALID_LEAD_SOURCES.includes(item.source as LeadSource))
           ? item.source as LeadSource

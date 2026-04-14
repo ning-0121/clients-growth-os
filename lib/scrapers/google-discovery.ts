@@ -43,15 +43,87 @@ const EXTRA_QUERIES = [
 
 // Domains to skip (not potential customers)
 const SKIP_DOMAINS = [
-  'youtube.com', 'facebook.com', 'twitter.com', 'pinterest.com',
-  'amazon.com', 'ebay.com', 'wikipedia.org', 'reddit.com',
-  'instagram.com', 'tiktok.com', 'linkedin.com',
-  'instyle.com', 'vogue.com', 'gq.com', 'esquire.com',
+  // Social / UGC platforms
+  'youtube.com', 'facebook.com', 'twitter.com', 'x.com', 'pinterest.com',
+  'instagram.com', 'tiktok.com', 'linkedin.com', 'threads.net',
+  'reddit.com', 'quora.com', 'medium.com', 'substack.com',
+
+  // Marketplaces
+  'amazon.com', 'ebay.com', 'etsy.com', 'walmart.com', 'target.com',
+  'alibaba.com', 'aliexpress.com', 'dhgate.com', 'made-in-china.com',
+  'wish.com', 'shein.com', 'temu.com',
+
+  // Review / directory / list sites
+  'trustpilot.com', 'yelp.com', 'glassdoor.com', 'bbb.org',
+  'crunchbase.com', 'zoominfo.com', 'dnb.com',
+  'g2.com', 'capterra.com', 'sitejabber.com',
+
+  // Media / magazines / blogs
+  'instyle.com', 'vogue.com', 'gq.com', 'esquire.com', 'elle.com',
   'womenshealthmag.com', 'menshealth.com', 'cosmopolitan.com',
   'buzzfeed.com', 'huffpost.com', 'forbes.com', 'bloomberg.com',
-  'alibaba.com', 'aliexpress.com', 'dhgate.com',
-  'google.com', 'bing.com', 'yahoo.com',
+  'businessinsider.com', 'cnbc.com', 'bbc.com', 'cnn.com',
+  'nytimes.com', 'washingtonpost.com', 'theguardian.com',
+  'glamour.com', 'refinery29.com', 'byrdie.com', 'allure.com',
+  'harpersbazaar.com', 'coveteur.com', 'whowhatwear.com',
+
+  // Search engines / tools
+  'google.com', 'bing.com', 'yahoo.com', 'duckduckgo.com',
+  'archive.org', 'web.archive.org',
+
+  // Reference / education
+  'wikipedia.org', 'wikihow.com', 'britannica.com',
+
+  // Job boards
+  'indeed.com', 'ziprecruiter.com', 'monster.com', 'careerbuilder.com',
+
+  // Generic / not-a-brand indicators
+  'shopify.com', 'bigcommerce.com', 'squarespace.com', 'wix.com',
+  'wordpress.com', 'blogger.com', 'tumblr.com',
+  'github.com', 'stackoverflow.com', 'npmjs.com',
+  'apple.com', 'play.google.com',
 ];
+
+// URL path patterns that indicate non-brand pages
+const SKIP_URL_PATTERNS = [
+  '/best-', '/top-', '/review', '/ranking', '/list-of-',
+  '/article/', '/blog/', '/news/', '/wiki/',
+  '/collections/', '/products/', // marketplace product pages
+  '/search?', '/tag/', '/category/',
+];
+
+/**
+ * Clean a URL: remove tracking params, normalize to homepage when possible.
+ */
+function cleanUrl(url: string): string {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+
+    // Remove common tracking parameters
+    const trackingParams = [
+      'srsltid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+      'gclid', 'fbclid', 'ref', 'source', 'mc_cid', 'mc_eid',
+    ];
+    trackingParams.forEach((p) => u.searchParams.delete(p));
+
+    // If the path is just a subpage like /pages/about, use the root domain instead
+    const nonHomePaths = ['/pages/', '/blogs/', '/collections/', '/products/', '/about', '/contact'];
+    if (nonHomePaths.some((p) => u.pathname.startsWith(p))) {
+      return `${u.protocol}//${u.host}`;
+    }
+
+    // Remove trailing slash for consistency
+    let cleaned = u.toString();
+    if (cleaned.endsWith('/') && u.pathname === '/') {
+      cleaned = cleaned.slice(0, -1);
+    }
+
+    return cleaned;
+  } catch {
+    return url;
+  }
+}
 
 /**
  * Build a rotation of search queries. Each call returns a different slice.
@@ -105,11 +177,22 @@ async function searchSerpAPI(query: string, apiKey: string): Promise<string[]> {
 
     const results = data.organic_results || [];
     return results
-      .map((item: any) => item.link as string)
+      .map((item: any) => cleanUrl(item.link as string))
       .filter((link: string) => {
         if (!link) return false;
         const domain = extractDomain(link);
-        return !SKIP_DOMAINS.some((skip) => domain.includes(skip));
+
+        // Skip known non-brand domains
+        if (SKIP_DOMAINS.some((skip) => domain.includes(skip))) return false;
+
+        // Skip URLs with list/review/article patterns
+        const lowerLink = link.toLowerCase();
+        if (SKIP_URL_PATTERNS.some((pattern) => lowerLink.includes(pattern))) return false;
+
+        // Skip PDFs and non-HTML
+        if (link.endsWith('.pdf') || link.endsWith('.xml') || link.endsWith('.json')) return false;
+
+        return true;
       });
   } catch (err) {
     console.warn(`[SerpAPI] Search error for "${query}":`, err);
