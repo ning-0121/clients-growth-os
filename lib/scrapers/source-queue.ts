@@ -16,22 +16,30 @@ export async function enqueueUrls(
 ): Promise<{ queued: number; duplicates: number }> {
   if (items.length === 0) return { queued: 0, duplicates: 0 };
 
-  const rows = items.map((item) => ({
-    source: item.source,
-    target_url: item.url,
-    target_data: item.data || {},
-    priority: item.priority || 50,
-    status: 'pending',
-  }));
+  let queued = 0;
+  let duplicates = 0;
 
-  // Upsert with ON CONFLICT DO NOTHING (dedup)
-  const { data, error } = await supabase
-    .from('lead_source_queue')
-    .upsert(rows, { onConflict: 'source,target_url', ignoreDuplicates: true })
-    .select('id');
+  // Insert one by one to handle unique constraint gracefully
+  for (const item of items) {
+    const { error } = await supabase
+      .from('lead_source_queue')
+      .insert({
+        source: item.source,
+        target_url: item.url,
+        target_data: item.data || {},
+        priority: item.priority || 50,
+        status: 'pending',
+      });
 
-  const queued = data?.length || 0;
-  return { queued, duplicates: items.length - queued };
+    if (error) {
+      // Unique constraint violation = duplicate, skip silently
+      duplicates++;
+    } else {
+      queued++;
+    }
+  }
+
+  return { queued, duplicates };
 }
 
 /**
