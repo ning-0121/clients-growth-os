@@ -140,7 +140,15 @@ export const socialPublisherAgent: Agent = {
             image_prompt: post.imagePrompt,
             scheduled_at: scheduledDate.toISOString(),
             call_to_action: post.callToAction,
-            status: 'scheduled',
+            status: 'pending_review',  // AI 生成后自动进入待审核
+            created_by: 'ai_agent',
+            approval_history: [{
+              action: 'submit',
+              actor_id: 'system',
+              actor_name: 'AI Social Publisher',
+              notes: `AI 自动生成 ${platform} 内容，等待人工审核`,
+              timestamp: new Date().toISOString(),
+            }],
           });
         }
 

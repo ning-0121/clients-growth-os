@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { runOutboundPipeline } from '@/lib/agents';
-import { COMPANY } from '@/lib/config/company';
+import { generateDailySearchPlans } from '@/lib/config/search-keywords';
 
 /**
  * GET /api/agents/outbound
- * Vercel Cron trigger — runs outbound pipeline with default keywords.
+ * Vercel Cron trigger — 按每日搜索计划轮换品类和地区搜索。
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -17,14 +17,22 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createServiceClient();
+    const dayOfWeek = new Date().getDay();
+    const plans = generateDailySearchPlans(dayOfWeek);
 
-    const result = await runOutboundPipeline(supabase, {
-      keywords: COMPANY.products.slice(0, 5),
-      platforms: ['google', 'instagram'],
-      maxResults: 10,
-    });
+    const results = [];
+    for (const plan of plans) {
+      const result = await runOutboundPipeline(supabase, {
+        keywords: plan.keywords,
+        platforms: plan.platforms,
+        region: plan.region,
+        maxResults: plan.maxResults,
+        excludeKeywords: plan.excludeKeywords,
+      });
+      results.push({ plan: plan.name, ...result });
+    }
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, plansExecuted: results.length, results });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('[Outbound Cron] Error:', errorMsg);
