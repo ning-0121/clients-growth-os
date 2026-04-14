@@ -1,16 +1,16 @@
 /**
  * Lead Hunter Agent — 基于真实数据源搜索客户
  *
- * 数据源优先级（全部合法、真实）:
+ * 数据源（全部合法、真实）:
  * 1. Google Custom Search API — 搜索关键词获取真实网站
- * 2. 网站直接爬取 — 从搜索结果中的官网提取信息
- * 3. Shopify 店铺识别 — 判断是否电商品牌
- * 4. Instagram 公开主页 — 验证社媒真实性
+ * 2. Google site:linkedin.com — 间接搜索 LinkedIn 决策者和公司
+ * 3. Shopify 店铺识别 — 判断是否电商品牌，提取产品/联系方式
+ * 4. Proxycurl API（可选）— LinkedIn 深度数据（$0.01/条，仅用于高质量线索）
  *
  * AI 的职责（不猜测、只分析）:
- * - 分析网站内容判断是否目标客户
- * - 从真实数据中提取结构化信息
- * - 给搜索结果评分和排序
+ * - 分析 Google 搜索结果，筛选真正的服装品牌/零售商
+ * - 交叉匹配 LinkedIn 人员和公司
+ * - 给每个搜索结果评分和排序
  */
 
 import { Agent, AgentContext, AgentResult, SearchCriteria } from '../types';
@@ -18,6 +18,8 @@ import { COMPANY } from '@/lib/config/company';
 import { analyzeStructured } from '@/lib/ai/ai-service';
 import { googleSearch, GoogleSearchResult } from '@/lib/scrapers/google-search';
 import { discoverShopifyStores, ShopifyStore } from '@/lib/scrapers/shopify-discovery';
+import { discoverLinkedInLeads, MatchedLinkedInLead } from '@/lib/scrapers/linkedin-discovery';
+import { getPersonProfile } from '@/lib/scrapers/proxycurl';
 import { deduplicateBatch } from '@/lib/utils/dedup';
 import { cleanBatch } from '@/lib/utils/data-cleaner';
 import { normalizeDomain } from '@/lib/utils/dedup';
@@ -179,58 +181,158 @@ export const leadHunterAgent: Agent = {
       }
 
       // ══════════════════════════════════════
-      // Step 4: 数据清洗 + 去重
+      // Step 4: LinkedIn 间接搜索 — 找到决策者
+      // ══════════════════════════════════════
+      let linkedInLeads: MatchedLinkedInLead[] = [];
+      try {
+        const linkedInKeywords = criteria.keywords.slice(0, 2); // 控制 API 配额
+        const linkedInResult = await discoverLinkedInLeads(linkedInKeywords, {
+          roles: ['founder', 'CEO', 'owner', 'buyer', 'sourcing manager', 'purchasing director'],
+          maxPeople: 15,
+          maxCompanies: 10,
+        });
+        linkedInLeads = linkedInResult.matched;
+      } catch (err) {
+        console.warn('[LeadHunter] LinkedIn discovery failed (non-critical):', err);
+      }
+
+      // 建立 LinkedIn 匹配索引: 公司名 → 决策者信息
+      const linkedInByCompany = new Map<string, MatchedLinkedInLead>();
+      for (const li of linkedInLeads) {
+        const key = li.companyName.toLowerCase().trim();
+        // 只保留决策者 or 高置信度的
+        if (li.isDecisionMaker || li.confidence >= 70) {
+          linkedInByCompany.set(key, li);
+        }
+      }
+
+      // ══════════════════════════════════════
+      // Step 5: 合并所有数据源 → 数据清洗 + 去重
       // ══════════════════════════════════════
       const rawLeads = analysis.qualified.map((q) => {
         const shopify = shopifyMap.get(normalizeDomain(q.website));
+        // 尝试匹配 LinkedIn 数据（公司名模糊匹配）
+        const companyKey = q.company_name.toLowerCase().trim();
+        const linkedIn = linkedInByCompany.get(companyKey) || null;
+
         return {
           company_name: q.company_name,
           website: q.website,
           contact_email: shopify?.contactEmail || null,
+          contact_name: linkedIn?.personName || null,
+          contact_title: linkedIn?.personTitle || null,
           instagram_handle: shopify?.socialLinks.instagram || null,
-          contact_linkedin: shopify?.socialLinks.linkedin
-            ? `https://linkedin.com/company/${shopify.socialLinks.linkedin}`
-            : null,
+          contact_linkedin: linkedIn?.personLinkedIn
+            || (shopify?.socialLinks.linkedin ? `https://linkedin.com/company/${shopify.socialLinks.linkedin}` : null),
           source: 'google_search',
           product_match: q.products.join(', '),
           company_type: q.company_type,
+          company_size: linkedIn?.companySize || null,
           confidence: q.confidence,
           fit_reason: q.reason,
           is_shopify: Boolean(shopify),
+          is_decision_maker: linkedIn?.isDecisionMaker || false,
           shopify_products: shopify?.products.join(', ') || null,
           estimated_product_count: shopify?.estimatedProducts || 0,
         };
       });
 
+      // 同时加入 LinkedIn 独立发现的线索（Google搜不到但LinkedIn有的公司）
+      for (const li of linkedInLeads) {
+        const alreadyHave = rawLeads.some(
+          (r) => r.company_name.toLowerCase() === li.companyName.toLowerCase()
+        );
+        if (!alreadyHave && li.isDecisionMaker && li.confidence >= 60) {
+          rawLeads.push({
+            company_name: li.companyName,
+            website: null as unknown as string, // 还没有官网，后续 Analyzer 会补充
+            contact_email: null,
+            contact_name: li.personName,
+            contact_title: li.personTitle,
+            instagram_handle: null,
+            contact_linkedin: li.personLinkedIn,
+            source: 'linkedin_search',
+            product_match: li.companyIndustry || '',
+            company_type: 'brand',
+            company_size: li.companySize,
+            confidence: li.confidence,
+            fit_reason: `LinkedIn决策者: ${li.personTitle} at ${li.companyName}`,
+            is_shopify: false,
+            is_decision_maker: true,
+            shopify_products: null,
+            estimated_product_count: 0,
+          });
+        }
+      }
+
       const { valid: cleanedLeads, rejected } = cleanBatch(rawLeads);
       const { unique: newLeads, duplicates } = await deduplicateBatch(context.supabase, cleanedLeads);
 
       // ══════════════════════════════════════
-      // Step 5: 入库
+      // Step 6: Proxycurl 深度验证（仅高质量线索，可选）
+      // ══════════════════════════════════════
+      const proxycurlEnriched = new Map<string, { email?: string; phone?: string }>();
+      if (process.env.PROXYCURL_API_KEY) {
+        // 只对有 LinkedIn URL 且置信度高的线索使用 Proxycurl
+        const highValueLeads = newLeads
+          .filter((l) => {
+            const raw = l as Record<string, unknown>;
+            return l.contact_linkedin && Number(raw.confidence || 0) >= 70 && raw.is_decision_maker;
+          })
+          .slice(0, 5); // 最多5条，控制成本
+
+        for (const lead of highValueLeads) {
+          try {
+            const profile = await getPersonProfile(lead.contact_linkedin!);
+            if (profile) {
+              const bestEmail = profile.workEmail || profile.personalEmails[0] || null;
+              proxycurlEnriched.set(lead.contact_linkedin!, {
+                email: bestEmail || undefined,
+                phone: profile.phoneNumbers[0] || undefined,
+              });
+            }
+            await new Promise((r) => setTimeout(r, 1000));
+          } catch {
+            // Proxycurl 失败不影响流程
+          }
+        }
+      }
+
+      // ══════════════════════════════════════
+      // Step 7: 入库
       // ══════════════════════════════════════
       const insertedLeads: string[] = [];
       for (const lead of newLeads) {
         const raw = lead as Record<string, unknown>;
+        // 用 Proxycurl 数据补充邮箱
+        const proxycurl = lead.contact_linkedin ? proxycurlEnriched.get(lead.contact_linkedin) : undefined;
+        const finalEmail = lead.contact_email || proxycurl?.email || null;
+
         const { data: inserted } = await context.supabase
           .from('growth_leads')
           .insert({
             company_name: lead.company_name,
             website: lead.website,
-            contact_email: lead.contact_email,
+            contact_email: finalEmail,
+            contact_name: raw.contact_name || null,
             instagram_handle: lead.instagram_handle,
             contact_linkedin: lead.contact_linkedin,
-            source: 'google_search',
+            source: String(raw.source || 'google_search'),
             status: 'new',
             product_match: lead.product_match,
             ai_analysis: {
               company_type: raw.company_type,
+              company_size: raw.company_size,
+              contact_title: raw.contact_title,
+              is_decision_maker: raw.is_decision_maker,
               confidence: raw.confidence,
               fit_reason: raw.fit_reason,
               is_shopify: raw.is_shopify,
               shopify_products: raw.shopify_products,
               estimated_product_count: raw.estimated_product_count,
+              proxycurl_enriched: Boolean(proxycurl),
               data_quality_score: raw.dataQualityScore,
-              data_source: 'google_cse + website_scrape',
+              data_source: `google_cse + shopify + linkedin${proxycurl ? ' + proxycurl' : ''}`,
               hunted_at: new Date().toISOString(),
             },
           })
@@ -253,6 +355,10 @@ export const leadHunterAgent: Agent = {
           aiExcluded: analysis.excluded.length,
           // Shopify 识别
           shopifyStoresFound: shopifyStores.length,
+          // LinkedIn 搜索
+          linkedInPeopleFound: linkedInLeads.length,
+          linkedInDecisionMakers: linkedInLeads.filter((l) => l.isDecisionMaker).length,
+          proxycurlEnriched: proxycurlEnriched.size,
           // 清洗阶段
           afterCleaning: cleanedLeads.length,
           rejectedByCleaning: rejected.length,
@@ -263,7 +369,7 @@ export const leadHunterAgent: Agent = {
           newLeadsInserted: insertedLeads.length,
           leadIds: insertedLeads,
           // 详细日志
-          pipeline: `${uniqueResults.length} 搜索结果 → ${analysis.qualified.length} AI筛选 → ${cleanedLeads.length} 清洗 → ${newLeads.length} 去重 → ${insertedLeads.length} 入库`,
+          pipeline: `${uniqueResults.length} Google → ${analysis.qualified.length} AI筛选 → ${linkedInLeads.length} LinkedIn → ${cleanedLeads.length} 清洗 → ${newLeads.length} 去重 → ${insertedLeads.length} 入库`,
         },
         nextAgent: insertedLeads.length > 0 ? 'lead-classifier' : undefined,
         shouldStop: insertedLeads.length === 0,
