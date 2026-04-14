@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { discoverLeads } from '@/lib/scrapers/google-discovery';
-import { discoverFromDDG } from '@/lib/scrapers/duckduckgo-discovery';
+import { discoverFromBing } from '@/lib/scrapers/duckduckgo-discovery';
 
 /**
  * POST /api/cron/discover
@@ -21,26 +21,22 @@ export async function POST(request: Request) {
     const supabase = createServiceClient();
     const results: Record<string, any> = {};
 
-    // Always run DuckDuckGo (free, unlimited)
-    try {
-      results.duckduckgo = await discoverFromDDG(supabase, 10);
-    } catch (err: any) {
-      results.duckduckgo = { error: err.message };
-    }
-
-    // Run SerpAPI only if configured, and only at hours 8 and 20 (2x/day to save quota)
-    const hour = new Date().getUTCHours();
     const serpApiKey = process.env.SERPAPI_KEY;
-    if (serpApiKey && (hour === 8 || hour === 20)) {
-      try {
-        results.serpapi = await discoverLeads(supabase, 5); // 5 queries to conserve
-      } catch (err: any) {
-        results.serpapi = { error: err.message };
-      }
+    if (!serpApiKey) {
+      return NextResponse.json({ success: true, message: 'SERPAPI_KEY not configured', total_new: 0 });
     }
 
-    const totalNew = (results.duckduckgo?.urls_new || 0) + (results.serpapi?.urls_new || 0);
-    const totalFound = (results.duckduckgo?.urls_found || 0) + (results.serpapi?.urls_found || 0);
+    // Run Google and Bing in parallel via SerpAPI (different results from same API)
+    const [googleResult, bingResult] = await Promise.allSettled([
+      discoverLeads(supabase, 5),      // 5 Google queries
+      discoverFromBing(supabase, 5),   // 5 Bing queries
+    ]);
+
+    results.google = googleResult.status === 'fulfilled' ? googleResult.value : { error: (googleResult as any).reason?.message };
+    results.bing = bingResult.status === 'fulfilled' ? bingResult.value : { error: (bingResult as any).reason?.message };
+
+    const totalNew = (results.google?.urls_new || 0) + (results.bing?.urls_new || 0);
+    const totalFound = (results.google?.urls_found || 0) + (results.bing?.urls_found || 0);
 
     return NextResponse.json({
       success: true,
