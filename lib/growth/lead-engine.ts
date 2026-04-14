@@ -81,8 +81,11 @@ export function scoreQuality(lead: RawLeadInput): number {
   const sourceScores: Record<string, number> = {
     referral: 35,
     customs: 30,
+    apollo: 28,
     linkedin: 25,
     website: 20,
+    google: 18,
+    directory: 18,
     ig: 15,
     test_batch: 10,
   };

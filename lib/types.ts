@@ -109,7 +109,7 @@ export type LeadStatus = 'new' | 'qualified' | 'disqualified' | 'converted';
 export type DealStage = '报价' | '样品' | '试单' | '大货';
 export type DealStatus = 'active' | 'won' | 'lost';
 
-export type LeadSource = 'ig' | 'linkedin' | 'website' | 'customs' | 'referral' | 'test_batch';
+export type LeadSource = 'ig' | 'linkedin' | 'website' | 'customs' | 'referral' | 'test_batch' | 'google' | 'apollo' | 'directory';
 
 export interface GrowthLead {
   id: string;
