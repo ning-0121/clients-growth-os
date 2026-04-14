@@ -24,11 +24,11 @@ export async function runIntakePipeline(
   userId: string,
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<IntakeResult> {
-  // Load existing for dedup
+  // Load existing for dedup (include disqualified to prevent re-importing rejected leads)
   const { data: existingLeads } = await supabase
     .from('growth_leads')
     .select('id, company_name, website, instagram_handle')
-    .in('status', ['new', 'qualified', 'converted']);
+    .in('status', ['new', 'qualified', 'converted', 'disqualified']);
 
   const dedupIndex = buildDedupIndex(existingLeads || []);
 

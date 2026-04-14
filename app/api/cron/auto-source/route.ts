@@ -8,6 +8,26 @@ import { RawLeadInput, LeadSource } from '@/lib/types';
 const VALID_LEAD_SOURCES: LeadSource[] = ['google', 'apollo', 'directory', 'website', 'ig', 'linkedin'];
 
 /**
+ * Clean URL: strip tracking params, normalize to homepage.
+ */
+function cleanTargetUrl(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    // Remove tracking params
+    ['srsltid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+     'gclid', 'fbclid', 'ref', 'mc_cid', 'mc_eid', 'msockid'].forEach(p => u.searchParams.delete(p));
+    // Normalize subpages to homepage
+    const subPages = ['/pages/', '/blogs/', '/collections/', '/products/', '/about', '/contact'];
+    if (subPages.some(p => u.pathname.startsWith(p))) {
+      return `${u.protocol}//${u.host}`;
+    }
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return rawUrl;
+  }
+}
+
+/**
  * POST /api/cron/auto-source
  * Cron (every hour): dequeues URLs from lead_source_queue,
  * enriches them (website scrape + AI), and feeds through intake pipeline.
@@ -44,9 +64,12 @@ export async function POST(request: Request) {
       }
 
       try {
+        // Clean URL before enriching
+        const cleanedUrl = cleanTargetUrl(item.target_url);
+
         // Enrich the URL using existing website enricher
         const { results, failures } = await enrichBatch(
-          [{ website: item.target_url }]
+          [{ website: cleanedUrl }]
         );
 
         if (results.length === 0) {
@@ -76,7 +99,7 @@ export async function POST(request: Request) {
         const lead: RawLeadInput = {
           company_name: result.company_name,
           source,
-          website: result.website,
+          website: cleanTargetUrl(result.website),
           contact_email: result.contact_email || undefined,
           instagram_handle: result.instagram_handle || undefined,
           contact_linkedin: result.contact_linkedin || undefined,
