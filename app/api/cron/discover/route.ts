@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
-import { discoverFromGoogle } from '@/lib/scrapers/google-discovery';
+import { discoverLeads } from '@/lib/scrapers/google-discovery';
 
 /**
  * POST /api/cron/discover
@@ -15,13 +15,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const googleKey = process.env.GOOGLE_CUSTOM_SEARCH_KEY;
-  const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
-
-  if (!googleKey || !searchEngineId) {
+  if (!process.env.SERPAPI_KEY) {
     return NextResponse.json({
       success: true,
-      message: 'Google Custom Search not configured. Set GOOGLE_CUSTOM_SEARCH_KEY and GOOGLE_SEARCH_ENGINE_ID.',
+      message: 'SERPAPI_KEY not configured. Sign up at https://serpapi.com/',
       urls_new: 0,
     });
   }
@@ -29,7 +26,7 @@ export async function POST(request: Request) {
   try {
     const supabase = createServiceClient();
 
-    const result = await discoverFromGoogle(googleKey, searchEngineId, supabase, 8);
+    const result = await discoverLeads(supabase, 8);
 
     return NextResponse.json({
       success: true,

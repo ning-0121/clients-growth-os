@@ -31,7 +31,6 @@ const COUNTRIES = [
   'Italy', 'Spain', 'Denmark', 'Norway', 'New Zealand',
 ];
 
-// Additional high-value queries
 const EXTRA_QUERIES = [
   '"looking for manufacturer" activewear',
   '"private label" sportswear brand',
@@ -42,24 +41,32 @@ const EXTRA_QUERIES = [
   'sustainable sportswear brand',
 ];
 
+// Domains to skip (not potential customers)
+const SKIP_DOMAINS = [
+  'youtube.com', 'facebook.com', 'twitter.com', 'pinterest.com',
+  'amazon.com', 'ebay.com', 'wikipedia.org', 'reddit.com',
+  'instagram.com', 'tiktok.com', 'linkedin.com',
+  'instyle.com', 'vogue.com', 'gq.com', 'esquire.com',
+  'womenshealthmag.com', 'menshealth.com', 'cosmopolitan.com',
+  'buzzfeed.com', 'huffpost.com', 'forbes.com', 'bloomberg.com',
+  'alibaba.com', 'aliexpress.com', 'dhgate.com',
+  'google.com', 'bing.com', 'yahoo.com',
+];
+
 /**
  * Build a rotation of search queries. Each call returns a different slice.
- * Uses a simple hash of the current date + hour to rotate through combinations.
  */
 function getQueriesForThisRun(maxQueries: number): string[] {
   const allQueries: string[] = [];
 
-  // Category × Country combinations
   for (const cat of CATEGORIES) {
     for (const country of COUNTRIES) {
       allQueries.push(`"${cat}" ${country}`);
     }
   }
-
-  // Extra queries
   allQueries.push(...EXTRA_QUERIES);
 
-  // Rotate based on current time (ensures different queries each run)
+  // Rotate based on current time
   const now = new Date();
   const rotationIndex = (now.getDate() * 24 + now.getHours()) * 3 + Math.floor(now.getMinutes() / 20);
   const offset = (rotationIndex * maxQueries) % allQueries.length;
@@ -73,47 +80,39 @@ function getQueriesForThisRun(maxQueries: number): string[] {
 }
 
 /**
- * Search Google Custom Search API and return unique URLs.
+ * Search via SerpAPI (Google search results).
+ * Free tier: 100 searches/month. Paid: $50/mo for 5000.
  */
-async function searchGoogle(
-  query: string,
-  apiKey: string,
-  searchEngineId: string
-): Promise<string[]> {
-  const url = `https://www.googleapis.com/customsearch/v1?key=${encodeURIComponent(apiKey)}&cx=${encodeURIComponent(searchEngineId)}&q=${encodeURIComponent(query)}&num=10`;
+async function searchSerpAPI(query: string, apiKey: string): Promise<string[]> {
+  const url = `https://serpapi.com/search.json?api_key=${apiKey}&q=${encodeURIComponent(query)}&num=10&engine=google`;
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
 
     if (!res.ok) {
-      console.warn(`[Google] Search failed for "${query}": HTTP ${res.status}`);
+      console.warn(`[SerpAPI] Search failed for "${query}": HTTP ${res.status}`);
       return [];
     }
 
     const data = await res.json();
-    const items = data.items || [];
+    if (data.error) {
+      console.warn(`[SerpAPI] Error: ${data.error}`);
+      return [];
+    }
 
-    return items
+    const results = data.organic_results || [];
+    return results
       .map((item: any) => item.link as string)
       .filter((link: string) => {
-        // Skip non-website results
         if (!link) return false;
-        if (link.includes('youtube.com')) return false;
-        if (link.includes('facebook.com')) return false;
-        if (link.includes('twitter.com')) return false;
-        if (link.includes('pinterest.com')) return false;
-        if (link.includes('amazon.com')) return false;
-        if (link.includes('ebay.com')) return false;
-        if (link.includes('wikipedia.org')) return false;
-        if (link.includes('reddit.com')) return false;
-        if (link.endsWith('.pdf')) return false;
-        return true;
+        const domain = extractDomain(link);
+        return !SKIP_DOMAINS.some((skip) => domain.includes(skip));
       });
   } catch (err) {
-    console.warn(`[Google] Search error for "${query}":`, err);
+    console.warn(`[SerpAPI] Search error for "${query}":`, err);
     return [];
   }
 }
@@ -127,10 +126,8 @@ async function filterExistingUrls(
 ): Promise<string[]> {
   if (urls.length === 0) return [];
 
-  // Extract domains for matching against existing leads
   const domains = urls.map((u) => extractDomain(u));
 
-  // Check existing leads by website domain
   const { data: existingLeads } = await supabase
     .from('growth_leads')
     .select('website')
@@ -140,7 +137,6 @@ async function filterExistingUrls(
     (existingLeads || []).map((l: any) => extractDomain(l.website))
   );
 
-  // Check existing queue items
   const { data: existingQueue } = await supabase
     .from('lead_source_queue')
     .select('target_url')
@@ -157,14 +153,17 @@ async function filterExistingUrls(
 }
 
 /**
- * Main discovery function. Runs search queries and enqueues new URLs.
+ * Main discovery function. Runs search queries via SerpAPI and enqueues new URLs.
  */
-export async function discoverFromGoogle(
-  apiKey: string,
-  searchEngineId: string,
+export async function discoverLeads(
   supabase: SupabaseClient,
   maxQueries = 8
 ): Promise<DiscoveryResult> {
+  const serpApiKey = process.env.SERPAPI_KEY;
+  if (!serpApiKey) {
+    throw new Error('SERPAPI_KEY not configured. Sign up at https://serpapi.com/');
+  }
+
   const queries = getQueriesForThisRun(maxQueries);
   const result: DiscoveryResult = {
     queries_run: 0,
@@ -177,33 +176,28 @@ export async function discoverFromGoogle(
   const allNewUrls: string[] = [];
 
   for (const query of queries) {
-    const urls = await searchGoogle(query, apiKey, searchEngineId);
+    const urls = await searchSerpAPI(query, serpApiKey);
     const newUrls = await filterExistingUrls(urls, supabase);
 
     result.queries_run++;
     result.urls_found += urls.length;
-    result.details.push({
-      query,
-      found: urls.length,
-      new: newUrls.length,
-    });
+    result.details.push({ query, found: urls.length, new: newUrls.length });
 
     allNewUrls.push(...newUrls);
 
-    // Small delay between queries to be respectful
-    await new Promise((r) => setTimeout(r, 200));
+    // Respect rate limits
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   // Deduplicate within this batch
   const uniqueNewUrls = [...new Set(allNewUrls)];
 
-  // Enqueue
   if (uniqueNewUrls.length > 0) {
-    const { queued, duplicates } = await enqueueUrls(
+    const { queued } = await enqueueUrls(
       uniqueNewUrls.map((url) => ({
         url,
         source: 'google',
-        priority: 30, // Google results are medium-high priority
+        priority: 30,
       })),
       supabase
     );
@@ -213,7 +207,7 @@ export async function discoverFromGoogle(
 
   // Log discovery run
   await supabase.from('discovery_runs').insert({
-    source: 'google',
+    source: 'serpapi',
     query_used: queries.join(' | '),
     urls_found: result.urls_found,
     urls_new: result.urls_new,

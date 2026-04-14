@@ -266,7 +266,7 @@ export const leadHunterAgent: Agent = {
       }
 
       const { valid: cleanedLeads, rejected } = cleanBatch(rawLeads);
-      const { unique: newLeads, duplicates } = await deduplicateBatch(context.supabase, cleanedLeads);
+      const { unique: newLeads, duplicates } = await deduplicateBatch(context.supabase, cleanedLeads as any);
 
       // ══════════════════════════════════════
       // Step 6: Proxycurl 深度验证（仅高质量线索，可选）
@@ -277,16 +277,18 @@ export const leadHunterAgent: Agent = {
         const highValueLeads = newLeads
           .filter((l) => {
             const raw = l as Record<string, unknown>;
-            return l.contact_linkedin && Number(raw.confidence || 0) >= 70 && raw.is_decision_maker;
+            return raw.contact_linkedin && Number(raw.confidence || 0) >= 70 && raw.is_decision_maker;
           })
           .slice(0, 5); // 最多5条，控制成本
 
         for (const lead of highValueLeads) {
           try {
-            const profile = await getPersonProfile(lead.contact_linkedin!);
+            const raw = lead as Record<string, any>;
+            if (!raw.contact_linkedin) continue;
+            const profile = await getPersonProfile(raw.contact_linkedin);
             if (profile) {
               const bestEmail = profile.workEmail || profile.personalEmails[0] || null;
-              proxycurlEnriched.set(lead.contact_linkedin!, {
+              proxycurlEnriched.set(raw.contact_linkedin, {
                 email: bestEmail || undefined,
                 phone: profile.phoneNumbers[0] || undefined,
               });
@@ -305,7 +307,8 @@ export const leadHunterAgent: Agent = {
       for (const lead of newLeads) {
         const raw = lead as Record<string, unknown>;
         // 用 Proxycurl 数据补充邮箱
-        const proxycurl = lead.contact_linkedin ? proxycurlEnriched.get(lead.contact_linkedin) : undefined;
+        const linkedinUrl = raw.contact_linkedin as string | undefined;
+        const proxycurl = linkedinUrl ? proxycurlEnriched.get(linkedinUrl) : undefined;
         const finalEmail = lead.contact_email || proxycurl?.email || null;
 
         const { data: inserted } = await context.supabase
@@ -316,10 +319,10 @@ export const leadHunterAgent: Agent = {
             contact_email: finalEmail,
             contact_name: raw.contact_name || null,
             instagram_handle: lead.instagram_handle,
-            contact_linkedin: lead.contact_linkedin,
+            contact_linkedin: (raw.contact_linkedin as string) || null,
             source: String(raw.source || 'google_search'),
             status: 'new',
-            product_match: lead.product_match,
+            product_match: (raw.product_match as string) || null,
             ai_analysis: {
               company_type: raw.company_type,
               company_size: raw.company_size,
