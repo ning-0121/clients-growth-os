@@ -141,10 +141,14 @@ async function fastEnrich(url: string): Promise<{
  * POST /api/cron/auto-source
  * FAST mode: 10 items per run × every 10 min = 60/hour = 1,440/day
  */
-export async function POST(request: Request) {
+// Vercel Cron sends GET requests
+export async function GET(request: Request) { return handleCron(request); }
+export async function POST(request: Request) { return handleCron(request); }
+
+async function handleCron(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const vercelCron = request.headers.get("x-vercel-cron"); if (!vercelCron && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

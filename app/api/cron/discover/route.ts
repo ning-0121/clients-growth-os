@@ -17,11 +17,14 @@ import { extractDomain } from '@/lib/growth/lead-engine';
  * 3. Social + E-commerce — IG brands + Shopify stores
  * 4. Self-Learning — queries generated from won deals + expanded scope
  */
-export async function POST(request: Request) {
+export async function GET(request: Request) { return handleCron(request); }
+export async function POST(request: Request) { return handleCron(request); }
+
+async function handleCron(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const vercelCron = request.headers.get("x-vercel-cron"); if (!vercelCron && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

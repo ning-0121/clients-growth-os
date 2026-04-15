@@ -9,7 +9,10 @@ import { processOutreachQueue } from '@/lib/outreach/sequence-engine';
  *
  * Auth: CRON_SECRET header (not user session).
  */
-export async function POST(request: Request) {
+export async function GET(request: Request) { return handleCron(request); }
+export async function POST(request: Request) { return handleCron(request); }
+
+async function handleCron(request: Request) {
   // Validate cron secret
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;

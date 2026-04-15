@@ -8,7 +8,10 @@ import { planEngagements } from '@/lib/social/engagement-planner';
  * generates personalized content, stores as queued engagements.
  * PhantomBuster agents pick these up for execution.
  */
-export async function POST(request: Request) {
+export async function GET(request: Request) { return handleCron(request); }
+export async function POST(request: Request) { return handleCron(request); }
+
+async function handleCron(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 

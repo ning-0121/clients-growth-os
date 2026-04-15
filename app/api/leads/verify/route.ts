@@ -10,7 +10,10 @@ import { runVerificationPipeline } from '@/lib/growth/verification-pipeline';
  * - CRON_SECRET Bearer token (for Vercel Cron)
  * - User session (admin role)
  */
-export async function POST(request: Request) {
+export async function GET(request: Request) { return handleCron(request); }
+export async function POST(request: Request) { return handleCron(request); }
+
+async function handleCron(request: Request) {
   let supabase: any;
 
   // Auth mode 1: Cron secret
