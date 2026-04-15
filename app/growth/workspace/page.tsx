@@ -5,6 +5,7 @@ import Link from 'next/link';
 import GrowthNavbar from '@/components/GrowthNavbar';
 import { GrowthLead } from '@/lib/types';
 import LeadActionPanel from '../my-today/LeadActionPanel';
+import { calculateAIDailyProgress } from '@/lib/config/daily-targets';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +63,9 @@ export default async function WorkspacePage() {
     .from('growth_leads')
     .select('id', { count: 'exact', head: true })
     .in('status', ['new', 'qualified', 'converted']);
+
+  // AI KPI progress
+  const kpi = await calculateAIDailyProgress(supabase);
 
   // Bucketing
   const buckets = {
@@ -131,6 +135,43 @@ export default async function WorkspacePage() {
               <div className="text-lg font-bold text-gray-700">{totalLeads || 0}</div>
               <div className="text-xs text-gray-500">客户总数</div>
             </div>
+          </div>
+        </div>
+
+        {/* AI KPI Progress */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-900">AI 今日 KPI</h2>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              kpi.status === 'ahead' ? 'bg-green-100 text-green-700' :
+              kpi.status === 'on_track' ? 'bg-blue-100 text-blue-700' :
+              kpi.status === 'behind' ? 'bg-amber-100 text-amber-700' :
+              'bg-red-100 text-red-700'
+            }`}>
+              {kpi.status === 'ahead' ? '超额完成' :
+               kpi.status === 'on_track' ? '进度正常' :
+               kpi.status === 'behind' ? '进度滞后' : '严重滞后'}
+              {' '}{kpi.overall_percentage}%
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {kpi.metrics.map((m) => (
+              <div key={m.key} className="text-center">
+                <div className="text-xs text-gray-500 mb-1">{m.label}</div>
+                <div className="flex items-baseline justify-center gap-0.5">
+                  <span className={`text-lg font-bold ${m.percentage >= 100 ? 'text-green-600' : m.percentage >= 50 ? 'text-blue-600' : 'text-red-600'}`}>
+                    {m.actual}
+                  </span>
+                  <span className="text-xs text-gray-400">/{m.target}{m.unit}</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${m.percentage >= 100 ? 'bg-green-500' : m.percentage >= 50 ? 'bg-blue-500' : 'bg-red-400'}`}
+                    style={{ width: `${Math.min(100, m.percentage)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
