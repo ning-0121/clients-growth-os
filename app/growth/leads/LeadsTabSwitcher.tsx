@@ -42,12 +42,53 @@ const SOURCE_LABELS: Record<string, string> = {
   test_batch: '测试', google: '搜索', apollo: 'Apollo', directory: '目录',
 };
 
-// Categorize leads by quality
+/**
+ * 客户分级标准（核心原则：能联系上决策人的才是好线索）
+ *
+ * A级（可以直接开发）:
+ *   - 有个人邮箱（不是 info@/support@/sales@）或有 LinkedIn 个人页
+ *   - AI 确认是服装行业
+ *   - 有产品匹配
+ *
+ * B级（有潜力，需要补充信息）:
+ *   - 有通用邮箱（info@/sales@）+ AI确认服装行业
+ *   - 或者有 IG + 网站 + 产品匹配
+ *
+ * C级（信息不足，需要深度挖掘）:
+ *   - 有网站但没邮箱
+ *   - 或者只有 IG 没有其他联系方式
+ *
+ * D级（暂时无法开发）:
+ *   - 没有任何有效联系方式
+ *   - 或者AI判定非服装行业
+ */
 function categorize(l: any): 'A' | 'B' | 'C' | 'D' {
-  const prob = l.deal_probability || 0;
-  if (prob >= 61 || (l.grade === 'A' && l.action_count > 0)) return 'A';
-  if (prob >= 41 || (l.grade === 'B+' && l.action_count > 0)) return 'B';
-  if (prob >= 21 || l.first_touch_at) return 'C';
+  const ai = l.ai_analysis || {};
+  const email = l.contact_email || '';
+  const emailLocal = email.split('@')[0]?.toLowerCase() || '';
+  const isPersonalEmail = email && !['info', 'sales', 'hello', 'contact', 'support', 'help', 'customerservice', 'noreply', 'admin', 'general', 'enquiry', 'inquiry', 'care'].includes(emailLocal);
+  const isGenericEmail = email && !isPersonalEmail;
+  const hasLinkedInPerson = l.contact_linkedin && l.contact_linkedin.includes('/in/'); // Personal profile, not company
+  const hasIG = !!l.instagram_handle;
+  const isApparel = ai.is_apparel_company !== false; // true or null (not yet analyzed)
+  const hasProduct = !!l.product_match || (ai.product_categories && ai.product_categories.length > 0);
+  const hasPhone = !!l.contact_phone;
+
+  // Already in active deal = A regardless
+  if (l.deal_probability >= 61 || l.action_count > 2) return 'A';
+
+  // A级: 有决策人联系方式 + 服装行业
+  if ((isPersonalEmail || hasLinkedInPerson || hasPhone) && isApparel && hasProduct) return 'A';
+
+  // B级: 有通用邮箱 + 服装行业，或者多个联系渠道
+  if (isGenericEmail && isApparel && hasProduct) return 'B';
+  if (hasIG && l.website && hasProduct && (email || l.contact_linkedin)) return 'B';
+
+  // C级: 有网站或IG但联系方式不足
+  if (l.website && isApparel) return 'C';
+  if (hasIG && isApparel) return 'C';
+
+  // D级: 其他
   return 'D';
 }
 

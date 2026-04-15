@@ -79,15 +79,23 @@ export default async function DealsPage() {
   }));
 
   // Categorize
-  // A级: 概率>60% 或 grade A 且有互动
-  // B级: 概率40-60% 或 grade B+ 且有互动
-  // C级: 概率20-40% 或 有首触
-  // D级: 概率<20% 或 无互动
+  // 分级标准: 能联系上决策人的才是好线索
   const categorize = (l: any): 'A' | 'B' | 'C' | 'D' => {
-    const prob = l.deal_probability || 0;
-    if (prob >= 61 || (l.grade === 'A' && l.action_count > 0)) return 'A';
-    if (prob >= 41 || (l.grade === 'B+' && l.action_count > 0)) return 'B';
-    if (prob >= 21 || l.first_touch_at) return 'C';
+    const ai = l.ai_analysis || {};
+    const email = l.contact_email || '';
+    const emailLocal = email.split('@')[0]?.toLowerCase() || '';
+    const isPersonalEmail = email && !['info', 'sales', 'hello', 'contact', 'support', 'help', 'customerservice', 'noreply', 'admin'].includes(emailLocal);
+    const isGenericEmail = email && !isPersonalEmail;
+    const hasLinkedInPerson = l.contact_linkedin && l.contact_linkedin.includes('/in/');
+    const isApparel = ai.is_apparel_company !== false;
+    const hasProduct = !!l.product_match || (ai.product_categories && ai.product_categories.length > 0);
+
+    if (l.deal_probability >= 61 || l.action_count > 2) return 'A';
+    if ((isPersonalEmail || hasLinkedInPerson || l.contact_phone) && isApparel && hasProduct) return 'A';
+    if (isGenericEmail && isApparel && hasProduct) return 'B';
+    if (l.instagram_handle && l.website && hasProduct && (email || l.contact_linkedin)) return 'B';
+    if (l.website && isApparel) return 'C';
+    if (l.instagram_handle && isApparel) return 'C';
     return 'D';
   };
 
