@@ -64,7 +64,7 @@ export default async function CalendarPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Buying Calendar</h1>
+            <h1 className="text-xl font-bold text-gray-900">采购日历</h1>
             <p className="text-sm text-gray-500 mt-1">客户采购季节日历 — 提前规划产品准备、会议预约和下单节点</p>
           </div>
           <CustomerProfileForm customers={allCustomers} configs={allConfigs} />

@@ -68,15 +68,15 @@ export default function GrowthNavbar() {
   );
 
   const links: { href: string; label: string; show: boolean }[] = [
-    { href: '/growth/my-today', label: 'My Leads', show: isSales },
-    { href: '/growth/intake', label: 'Lead Intake', show: isSales },
-    { href: '/growth/deals', label: 'Deals', show: isSales },
-    { href: '/growth/probability', label: 'Probability', show: isSales },
-    { href: '/growth/calendar', label: 'Calendar', show: isSales },
-    { href: '/growth/outreach', label: 'Outreach', show: isSales },
-    { href: '/growth/conversations', label: 'Chats', show: isSales },
-    { href: '/growth/staff-performance', label: 'Performance', show: isAdmin },
-    { href: '/growth/stats', label: 'Growth Stats', show: isAdmin },
+    { href: '/growth/my-today', label: '我的线索', show: isSales },
+    { href: '/growth/intake', label: '线索录入', show: isSales },
+    { href: '/growth/deals', label: '商机', show: isSales },
+    { href: '/growth/probability', label: '成交概率', show: isSales },
+    { href: '/growth/calendar', label: '采购日历', show: isSales },
+    { href: '/growth/outreach', label: '开发信', show: isSales },
+    { href: '/growth/conversations', label: '客服对话', show: isSales },
+    { href: '/growth/staff-performance', label: '员工绩效', show: isAdmin },
+    { href: '/growth/stats', label: '增长统计', show: isAdmin },
   ];
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');

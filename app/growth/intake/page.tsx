@@ -24,11 +24,14 @@ const STATUS_LABELS: Record<string, { text: string; color: string }> = {
 const SOURCE_LABELS: Record<string, { text: string; color: string }> = {
   ig: { text: 'IG', color: 'bg-pink-100 text-pink-700' },
   linkedin: { text: 'LI', color: 'bg-indigo-100 text-indigo-700' },
-  website: { text: 'Web', color: 'bg-sky-100 text-sky-700' },
+  website: { text: '网站', color: 'bg-sky-100 text-sky-700' },
   customs: { text: '海关', color: 'bg-amber-100 text-amber-700' },
   referral: { text: '推荐', color: 'bg-green-100 text-green-700' },
   test_batch: { text: '测试', color: 'bg-gray-100 text-gray-500' },
   auto_scrape: { text: '抓取', color: 'bg-violet-100 text-violet-700' },
+  google: { text: '搜索', color: 'bg-orange-100 text-orange-700' },
+  apollo: { text: 'Apollo', color: 'bg-cyan-100 text-cyan-700' },
+  directory: { text: '目录', color: 'bg-teal-100 text-teal-700' },
 };
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -97,7 +100,7 @@ export default async function IntakePage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Lead Intake Hub</h1>
+            <h1 className="text-2xl font-bold text-gray-900">线索录入中心</h1>
             <p className="text-sm text-gray-500 mt-1">
               统一线索入口：CSV / 网站 / 手动 / API
             </p>

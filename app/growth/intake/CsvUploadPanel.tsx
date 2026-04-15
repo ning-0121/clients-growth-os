@@ -63,7 +63,7 @@ export default function CsvUploadPanel() {
   const loadCsv = (text: string) => {
     const parsed = parseCSV(text);
     if (parsed.rows.length === 0) {
-      setResult({ error: 'No data rows found in CSV' });
+      setResult({ error: 'CSV 中未找到数据行' });
       return;
     }
     setCsv(parsed);
@@ -140,10 +140,10 @@ export default function CsvUploadPanel() {
           className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-indigo-400 transition-colors"
         >
           <p className="text-sm text-gray-600 mb-2">
-            Drop CSV file here or click to browse
+            拖放 CSV 文件或点击浏览
           </p>
           <p className="text-xs text-gray-400 mb-4">
-            Supports PhantomBuster exports, max 200 rows
+            支持 PhantomBuster 导出，最多 200 行
           </p>
           <input
             ref={fileRef}
@@ -157,7 +157,7 @@ export default function CsvUploadPanel() {
             htmlFor="csv-file"
             className="cursor-pointer px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
           >
-            Browse Files
+            浏览文件
           </label>
         </div>
       ) : (
@@ -165,15 +165,15 @@ export default function CsvUploadPanel() {
           {/* File loaded header */}
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-700">
-              <span className="font-medium">{csv.rows.length} rows</span>
+              <span className="font-medium">{csv.rows.length} 行</span>
               <span className="text-gray-400 mx-1">/</span>
-              <span>{csv.headers.length} columns</span>
+              <span>{csv.headers.length} 列</span>
               {isOverLimit && (
-                <span className="text-red-600 font-medium ml-2">(exceeds limit of 200)</span>
+                <span className="text-red-600 font-medium ml-2">(超过限制 200 行)</span>
               )}
             </div>
             <button onClick={reset} className="text-xs text-gray-500 hover:text-gray-700 underline">
-              Clear & reload
+              清除重新上传
             </button>
           </div>
 
@@ -203,14 +203,14 @@ export default function CsvUploadPanel() {
             </table>
             {csv.rows.length > 5 && (
               <div className="px-3 py-1.5 text-xs text-gray-400 bg-gray-50 border-t">
-                ... and {csv.rows.length - 5} more rows
+                ... 还有 {csv.rows.length - 5} 行
               </div>
             )}
           </div>
 
           {/* Column mapping */}
           <div className="bg-gray-50 rounded-md border border-gray-200 p-4">
-            <h4 className="text-xs font-semibold text-gray-700 mb-3">Column Mapping</h4>
+            <h4 className="text-xs font-semibold text-gray-700 mb-3">列映射</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {MAPPABLE_FIELDS.map((f) => (
                 <div key={f.key} className="flex items-center gap-2">
@@ -223,7 +223,7 @@ export default function CsvUploadPanel() {
                     onChange={(e) => updateMapping(f.key, e.target.value)}
                     className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
-                    <option value="">— unmapped —</option>
+                    <option value="">— 未映射 —</option>
                     {csv.headers.map((h) => (
                       <option key={h} value={h}>{h}</option>
                     ))}
@@ -244,7 +244,7 @@ export default function CsvUploadPanel() {
                   onChange={(e) => updateMapping('source_column', e.target.value)}
                   className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 >
-                  <option value="">— use default for all —</option>
+                  <option value="">— 全部使用默认来源 —</option>
                   {csv.headers.map((h) => (
                     <option key={h} value={h}>{h}</option>
                   ))}
@@ -271,13 +271,13 @@ export default function CsvUploadPanel() {
           {/* Warnings */}
           {warnings && (
             <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
-              <h4 className="text-xs font-semibold text-amber-800 mb-2">Import Quality Preview</h4>
+              <h4 className="text-xs font-semibold text-amber-800 mb-2">导入质量预览</h4>
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                <WarningCard label="Likely valid" value={warnings.likely_valid} total={warnings.total} color="green" />
-                <WarningCard label="Likely duplicates" value={warnings.likely_duplicates} total={warnings.total} color={warnings.likely_duplicates > 0 ? 'red' : 'green'} />
-                <WarningCard label="Missing contact" value={warnings.missing_contact_path} total={warnings.total} color={warnings.missing_contact_path > 0 ? 'amber' : 'green'} />
-                <WarningCard label="Missing website" value={warnings.missing_website} total={warnings.total} color={warnings.missing_website > 0 ? 'amber' : 'green'} />
-                <WarningCard label="Missing company" value={warnings.missing_company_name} total={warnings.total} color={warnings.missing_company_name > 0 ? 'red' : 'green'} />
+                <WarningCard label="可能有效" value={warnings.likely_valid} total={warnings.total} color="green" />
+                <WarningCard label="可能重复" value={warnings.likely_duplicates} total={warnings.total} color={warnings.likely_duplicates > 0 ? 'red' : 'green'} />
+                <WarningCard label="缺少联系方式" value={warnings.missing_contact_path} total={warnings.total} color={warnings.missing_contact_path > 0 ? 'amber' : 'green'} />
+                <WarningCard label="缺少网站" value={warnings.missing_website} total={warnings.total} color={warnings.missing_website > 0 ? 'amber' : 'green'} />
+                <WarningCard label="缺少公司名" value={warnings.missing_company_name} total={warnings.total} color={warnings.missing_company_name > 0 ? 'red' : 'green'} />
               </div>
             </div>
           )}
@@ -303,14 +303,14 @@ export default function CsvUploadPanel() {
               disabled={isChecking || isImporting || !mapping?.company_name}
               className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isChecking ? 'Checking...' : 'Preview Warnings'}
+              {isChecking ? '检查中...' : '预览警告'}
             </button>
             <button
               onClick={runImport}
               disabled={isImporting || isChecking || !mapping?.company_name || isOverLimit}
               className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isImporting ? 'Importing...' : `Import All (${csv.rows.length})`}
+              {isImporting ? '导入中...' : `导入全部 (${csv.rows.length})`}
             </button>
           </div>
         </>

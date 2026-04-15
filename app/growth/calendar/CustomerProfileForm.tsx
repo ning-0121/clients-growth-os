@@ -106,7 +106,7 @@ export default function CustomerProfileForm({ customers, configs }: Props) {
         onClick={() => { reset(); setOpen(true); }}
         className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
       >
-        + 添加客户
+        + 新建客户
       </button>
     );
   }

@@ -102,7 +102,7 @@ export default async function DealsPage() {
       <GrowthNavbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
+          <h1 className="text-2xl font-bold text-gray-900">商机管理</h1>
           <p className="text-sm text-gray-500 mt-1">商机管理 — 已转化线索的跟进进度</p>
         </div>
 
@@ -163,7 +163,7 @@ export default async function DealsPage() {
                               href={`/growth/leads/${deal.lead_id}`}
                               className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
                             >
-                              View Lead
+                              查看线索
                             </Link>
                           )}
                         </td>

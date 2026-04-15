@@ -8,9 +8,9 @@ import SeasonGridView from './SeasonGridView';
 type TabId = 'monthly' | 'customer' | 'season';
 
 const TABS: { id: TabId; label: string; sublabel: string }[] = [
-  { id: 'monthly', label: '这月做什么', sublabel: 'Action Items' },
-  { id: 'customer', label: '按客户', sublabel: 'By Customer' },
-  { id: 'season', label: '按季节', sublabel: 'By Season' },
+  { id: 'monthly', label: '这月做什么', sublabel: '待办事项' },
+  { id: 'customer', label: '按客户', sublabel: '客户时间线' },
+  { id: 'season', label: '按季节', sublabel: '季节网格' },
 ];
 
 interface Props {

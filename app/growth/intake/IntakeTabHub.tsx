@@ -10,11 +10,11 @@ import CustomsUploadPanel from './CustomsUploadPanel';
 type TabId = 'csv' | 'website' | 'manual' | 'customs' | 'api';
 
 const TABS: { id: TabId; label: string; sublabel: string }[] = [
-  { id: 'csv', label: 'CSV Upload', sublabel: 'PhantomBuster / tools' },
-  { id: 'website', label: 'Website Batch', sublabel: 'URL enrichment' },
-  { id: 'customs', label: '海关数据', sublabel: 'Trade records' },
-  { id: 'manual', label: 'Manual', sublabel: 'Single lead' },
-  { id: 'api', label: 'API', sublabel: 'Endpoint docs' },
+  { id: 'csv', label: 'CSV 上传', sublabel: 'PhantomBuster / 工具导出' },
+  { id: 'website', label: '网站批量', sublabel: 'URL 自动富集' },
+  { id: 'customs', label: '海关数据', sublabel: '贸易记录导入' },
+  { id: 'manual', label: '手动录入', sublabel: '单个线索' },
+  { id: 'api', label: 'API', sublabel: '接口文档' },
 ];
 
 export default function IntakeTabHub() {

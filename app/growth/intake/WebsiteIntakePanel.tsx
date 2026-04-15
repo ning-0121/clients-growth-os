@@ -19,7 +19,6 @@ export default function WebsiteIntakePanel() {
     const text = await file.text();
     setInput(text);
 
-    // Reset file input so the same file can be re-uploaded
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -31,7 +30,6 @@ export default function WebsiteIntakePanel() {
     setResult(null);
 
     try {
-      // Auto-detect format
       const firstLine = trimmed.split('\n')[0].toLowerCase();
       const format = (firstLine.includes('website') && firstLine.includes(','))
         ? 'csv' as const
@@ -44,7 +42,7 @@ export default function WebsiteIntakePanel() {
       }
     } catch {
       setResult({
-        error: 'Request failed',
+        error: '请求失败',
         total: 0, qualified: 0, disqualified: 0, duplicates: 0,
         ig_only_count: 0, failures: [],
       });
@@ -60,7 +58,7 @@ export default function WebsiteIntakePanel() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">
-          Paste URLs or upload .txt / .csv file (max 50 per batch)
+          粘贴 URL 或上传 .txt / .csv 文件（每批最多 50 个）
         </p>
         <div>
           <input
@@ -75,14 +73,14 @@ export default function WebsiteIntakePanel() {
             htmlFor="seed-file"
             className="cursor-pointer px-3 py-1.5 text-xs border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
           >
-            Upload File
+            上传文件
           </label>
         </div>
       </div>
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder={`Paste one URL per line:\nhttps://everlane.com\nhttps://vuoriclothing.com\n\nOr CSV format:\nwebsite,source_label,product_hint,notes\nhttps://everlane.com,,,\nhttps://vuoriclothing.com,,activewear,DTC focus`}
+        placeholder={`每行粘贴一个 URL：\nhttps://everlane.com\nhttps://vuoriclothing.com\n\n或 CSV 格式：\nwebsite,source_label,product_hint,notes\nhttps://everlane.com,,,\nhttps://vuoriclothing.com,,activewear,DTC品牌`}
         rows={6}
         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
         disabled={isLoading}
@@ -92,8 +90,8 @@ export default function WebsiteIntakePanel() {
         <div className="text-xs text-gray-500">
           {lineCount > 0 && (
             <span className={isOverLimit ? 'text-red-600 font-medium' : ''}>
-              {lineCount} URL{lineCount !== 1 ? 's' : ''}
-              {isOverLimit && ' (exceeds limit of 50)'}
+              {lineCount} 个 URL
+              {isOverLimit && '（超过限制 50）'}
             </span>
           )}
         </div>
@@ -102,11 +100,11 @@ export default function WebsiteIntakePanel() {
           disabled={isLoading || lineCount === 0 || isOverLimit}
           className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Enriching & importing...' : 'Run Website Intake'}
+          {isLoading ? '富集并导入中...' : '开始网站批量导入'}
         </button>
       </div>
 
-      {/* Results */}
+      {/* 结果 */}
       {result && (
         <div className={`mt-4 rounded-md p-3 text-sm ${result.error && !result.success ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-800'}`}>
           {result.error && !result.success ? (
@@ -114,12 +112,12 @@ export default function WebsiteIntakePanel() {
           ) : (
             <>
               <p className="font-medium">
-                {result.total} processed: {result.qualified} qualified, {result.disqualified} disqualified
-                {result.duplicates > 0 && `, ${result.duplicates} duplicates`}
+                共处理 {result.total} 条：{result.qualified} 条合格，{result.disqualified} 条已淘汰
+                {result.duplicates > 0 && `，${result.duplicates} 条重复`}
               </p>
               {result.ig_only_count > 0 && (
                 <p className="text-amber-700 mt-1">
-                  {result.ig_only_count} IG-only (no email/LI — disqualified, can upgrade later)
+                  {result.ig_only_count} 条仅有 IG（无邮箱/LinkedIn —已淘汰，可后续升级）
                 </p>
               )}
             </>
@@ -131,7 +129,7 @@ export default function WebsiteIntakePanel() {
                 onClick={() => setExpanded(!expanded)}
                 className="text-xs underline text-gray-600 hover:text-gray-800"
               >
-                {expanded ? 'Hide' : 'Show'} {result.failures.length} failed URL{result.failures.length !== 1 ? 's' : ''}
+                {expanded ? '隐藏' : '显示'} {result.failures.length} 个失败 URL
               </button>
               {expanded && (
                 <ul className="mt-1 space-y-1">

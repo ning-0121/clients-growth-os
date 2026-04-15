@@ -6,10 +6,10 @@ import { STAGE_CONFIG, ProbabilityStage } from '@/lib/growth/deal-probability';
 type TabId = 'boss' | 'hot' | 'risk' | 'all';
 
 const TABS: { id: TabId; label: string; sublabel: string }[] = [
-  { id: 'boss', label: '老板视图', sublabel: 'Boss View' },
-  { id: 'hot', label: '高潜池', sublabel: 'High Potential' },
-  { id: 'risk', label: '风险池', sublabel: 'At Risk' },
-  { id: 'all', label: '全部客户', sublabel: 'All Leads' },
+  { id: 'boss', label: '老板视图', sublabel: '高价值 + 需升级' },
+  { id: 'hot', label: '高潜池', sublabel: '概率 > 60%' },
+  { id: 'risk', label: '风险池', sublabel: '需要激活' },
+  { id: 'all', label: '全部客户', sublabel: '按概率排序' },
 ];
 
 const PRIORITY_COLORS: Record<string, string> = {

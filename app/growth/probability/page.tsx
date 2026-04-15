@@ -51,7 +51,7 @@ export default async function ProbabilityPage() {
       <GrowthNavbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900">Deal Probability</h1>
+          <h1 className="text-xl font-bold text-gray-900">成交概率</h1>
           <p className="text-sm text-gray-500 mt-1">成交概率引擎 — AI 自动判断客户成交概率，推荐下一步动作</p>
         </div>
 
@@ -59,7 +59,7 @@ export default async function ProbabilityPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <MetricCard label="高潜客户" sublabel="概率 > 60" value={hotLeads.length} color="text-green-600" border="border-green-200" />
           <MetricCard label="风险客户" sublabel="需要激活" value={riskLeads.length} color="text-red-600" border="border-red-200" />
-          <MetricCard label="需要升级" sublabel="Escalation" value={escalationLeads.length} color="text-purple-600" border="border-purple-200" />
+          <MetricCard label="需要升级" sublabel="需高层介入" value={escalationLeads.length} color="text-purple-600" border="border-purple-200" />
           <MetricCard label="冷客户池" sublabel="概率 < 20" value={coldLeads.length} color="text-gray-500" border="border-gray-200" />
         </div>
 
