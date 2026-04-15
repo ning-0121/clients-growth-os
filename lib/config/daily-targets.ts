@@ -87,6 +87,12 @@ export const DAILY_TARGETS = {
 
 /**
  * 计算 AI 系统今日 KPI 完成情况
+ *
+ * 重要：所有数字经过质量验证，不是简单 count
+ * - "合格入库" = 过了行业+网站+联系方式门的线索
+ * - "找到联系方式" = 真实个人邮箱，不算 info@/sales@
+ * - "发送开发信" = 真正送达的，不算 bounced
+ * - "完成验证" = 4轮全过的，不算中途失败
  */
 export async function calculateAIDailyProgress(
   supabase: any
