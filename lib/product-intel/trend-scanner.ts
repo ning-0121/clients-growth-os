@@ -278,11 +278,10 @@ export async function scanAlibabaSupply(
 export async function generateProductRecommendations(
   trends: TrendData[]
 ): Promise<ProductOpportunity[]> {
-  // Filter to top opportunities
+  // Use all trends for analysis (even low-scoring ones have value for comparison)
   const topTrends = trends
-    .filter(t => t.opportunity_score >= 40)
     .sort((a, b) => b.opportunity_score - a.opportunity_score)
-    .slice(0, 10);
+    .slice(0, 15);
 
   if (topTrends.length === 0) return [];
 
