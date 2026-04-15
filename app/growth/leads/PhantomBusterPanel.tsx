@@ -4,19 +4,58 @@ import { useState } from 'react';
 
 export default function PhantomBusterPanel() {
   const [showSetup, setShowSetup] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const [pullResult, setPullResult] = useState<any>(null);
 
   const webhookUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/api/webhooks/phantombuster`
     : 'https://order-growth-os.vercel.app/api/webhooks/phantombuster';
 
+  async function pullLatest() {
+    setPulling(true);
+    setPullResult(null);
+    try {
+      const res = await fetch('/api/phantombuster/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      setPullResult(data);
+    } catch {
+      setPullResult({ error: '拉取失败' });
+    } finally {
+      setPulling(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* Status */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-        <div className="text-sm font-medium text-indigo-800">PhantomBuster LinkedIn 数据导入</div>
-        <div className="text-xs text-indigo-600 mt-1">
-          通过 PhantomBuster 自动从 LinkedIn 搜索和提取潜在客户，完成后自动导入系统
+      {/* Quick pull */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium text-indigo-800">PhantomBuster LinkedIn 数据导入</div>
+            <div className="text-xs text-indigo-600 mt-1">PB 搜索完成后，点击下方按钮拉取最新数据到系统</div>
+          </div>
+          <button
+            onClick={pullLatest}
+            disabled={pulling}
+            className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium flex-shrink-0"
+          >
+            {pulling ? '拉取中...' : '拉取最新数据'}
+          </button>
         </div>
+
+        {pullResult && (
+          <div className={`mt-3 rounded p-2 text-xs ${pullResult.error ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+            {pullResult.error ? (
+              <p>{pullResult.error}</p>
+            ) : (
+              <p>PB 返回 {pullResult.pb_results || 0} 条 → 有效 {pullResult.valid_leads || 0} 条 → 合格 {pullResult.qualified || 0} 条，淘汰 {pullResult.disqualified || 0} 条，重复 {pullResult.duplicates || 0} 条</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* How it works */}
