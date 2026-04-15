@@ -201,6 +201,8 @@ export async function runSelfEvolution(
   tools_discovered: number;
   tools_relevant: number;
   techniques_found: number;
+  learned_queries: number;
+  new_apis_found: number;
   top_discoveries: DiscoveredTool[];
 }> {
   const allTools: DiscoveredTool[] = [];
