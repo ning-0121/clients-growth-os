@@ -29,7 +29,8 @@ export interface SendEmailParams {
  */
 export async function sendEmail(params: SendEmailParams): Promise<{ id: string } | { error: string }> {
   const resend = getResendClient();
-  const from = params.from || `${COMPANY.salesPerson} <${COMPANY.salesEmail}>`;
+  // Use Resend-verified subdomain for sending, reply-to goes to main domain (腾讯企业邮)
+  const from = params.from || `${COMPANY.salesPerson} <${COMPANY.sendingEmail}>`;
 
   try {
     const { data, error } = await resend.emails.send({
