@@ -13,6 +13,8 @@
     "@anthropic-ai/sdk": "^0.80.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
+    "ag-grid-community": "^35.2.1",
+    "ag-grid-react": "^35.2.1",
     "cheerio": "^1.2.0",
     "next": "^14.2.0",
     "react": "^18.3.0",

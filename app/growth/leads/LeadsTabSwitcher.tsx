@@ -2,10 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import AIDiscoveryPanel from './AIDiscoveryPanel';
 import PhantomBusterPanel from './PhantomBusterPanel';
 import CustomsExplorer from './CustomsExplorer';
 import SmartImportPanel from './SmartImportPanel';
+
+// AG Grid needs to be loaded client-side only (no SSR)
+const CustomerGrid = dynamic(() => import('./CustomerGrid'), { ssr: false });
 
 type TabId = 'all' | 'ai_discovery' | 'phantombuster' | 'customs' | 'import' | 'boss';
 
@@ -123,36 +127,7 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
         {activeTab === 'import' && <SmartImportPanel />}
 
         {(activeTab === 'all' || activeTab === 'boss') && (
-          <>
-            {sortedLeads.length === 0 ? (
-              <p className="text-sm text-gray-400 py-8 text-center">
-                {activeTab === 'boss' ? '暂无需要老板关注的客户' : '暂无客户数据，请通过 AI 自动开发或其他方式导入'}
-              </p>
-            ) : (
-              <>
-                {/* Category summary */}
-                {activeTab === 'all' && (
-                  <div className="flex gap-4 mb-4 text-xs">
-                    {(['A', 'B', 'C', 'D'] as const).map(cat => {
-                      const count = categorizedLeads.filter((l: any) => l.category === cat).length;
-                      const cfg = CATEGORY_CONFIG[cat];
-                      return (
-                        <span key={cat} className={`px-2 py-1 rounded ${cfg.bgColor} ${cfg.color} font-medium`}>
-                          {cfg.label} {count}个
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {sortedLeads.map((lead: any) => (
-                    <LeadRow key={lead.id} lead={lead} />
-                  ))}
-                </div>
-              </>
-            )}
-          </>
+          <CustomerGrid leads={activeTab === 'boss' ? sortedLeads : leads} isAdmin={isAdmin} />
         )}
       </div>
     </div>
