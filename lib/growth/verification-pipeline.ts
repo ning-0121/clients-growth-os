@@ -91,12 +91,29 @@ export async function runVerificationPipeline(
       } else {
         // Advance to next status
         const nextStatus = NEXT_STATUS[round];
+
+        // Save any contact info discovered during verification
+        const updateData: Record<string, any> = {
+          verification_status: nextStatus,
+          verification_evidence: updatedEvidence,
+        };
+        // If round 2 found new email/linkedin via contact hunter, save them
+        if (round === 2 && lead.contact_email && !lead._original_email) {
+          updateData.contact_email = lead.contact_email;
+        }
+        if (round === 2 && lead.contact_linkedin && !lead._original_linkedin) {
+          updateData.contact_linkedin = lead.contact_linkedin;
+        }
+        // Save phone/address from verification evidence
+        for (const check of evidence.checks) {
+          if (check.data?.phone) updateData.contact_phone = check.data.phone;
+          if (check.data?.address) updateData.contact_address = check.data.address;
+          if (check.data?.contacts) updateData.contact_people = check.data.contacts;
+        }
+
         await supabase
           .from('growth_leads')
-          .update({
-            verification_status: nextStatus,
-            verification_evidence: updatedEvidence,
-          })
+          .update(updateData)
           .eq('id', lead.id);
         result.advanced++;
 

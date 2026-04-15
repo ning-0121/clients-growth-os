@@ -153,7 +153,9 @@ export default async function LeadDetailPage({
               <Row label="产品匹配度" value={ai?.product_fit_score ? `${ai.product_fit_score}%` : '—'} />
               <Row label="产品品类" value={ai?.product_categories?.join(', ') || d.product_match || '—'} />
               <Row label="来源" value={d.source || '—'} />
-              <Row label="网站" value={d.website || '—'} />
+              {d.website ? (
+                <div className="flex justify-between"><span className="text-gray-500">网站</span><a href={d.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-[200px]">{d.website.replace(/^https?:\/\/(www\.)?/,'')}</a></div>
+              ) : <Row label="网站" value="—" />}
               <Row label="创建时间" value={new Date(d.created_at).toLocaleString('zh-CN')} />
             </dl>
           </div>
@@ -163,9 +165,15 @@ export default async function LeadDetailPage({
             <h3 className="text-sm font-semibold text-gray-700 mb-3">联系方式</h3>
             <dl className="space-y-2 text-sm">
               <Row label="联系人" value={d.contact_name || '—'} />
-              <Row label="邮箱" value={d.contact_email || '—'} />
-              <Row label="LinkedIn" value={d.contact_linkedin || '—'} />
-              <Row label="Instagram" value={d.instagram_handle ? `@${d.instagram_handle}` : '—'} />
+              {d.contact_email ? (
+                <div className="flex justify-between"><span className="text-gray-500">邮箱</span><a href={`mailto:${d.contact_email}`} className="text-blue-600 hover:underline">{d.contact_email}</a></div>
+              ) : <Row label="邮箱" value="—" />}
+              {d.contact_linkedin ? (
+                <div className="flex justify-between"><span className="text-gray-500">LinkedIn</span><a href={d.contact_linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-[200px]">打开 LinkedIn</a></div>
+              ) : <Row label="LinkedIn" value="—" />}
+              {d.instagram_handle ? (
+                <div className="flex justify-between"><span className="text-gray-500">Instagram</span><a href={`https://instagram.com/${d.instagram_handle}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">@{d.instagram_handle}</a></div>
+              ) : <Row label="Instagram" value="—" />}
             </dl>
             {!d.contact_email && !d.contact_linkedin && (
               <p className="text-xs text-red-500 mt-2 bg-red-50 p-2 rounded">缺少联系方式，系统会在 re-enrichment 中持续补充</p>

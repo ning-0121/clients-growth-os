@@ -1,7 +1,9 @@
 import { VerificationCheck } from '@/lib/ai/types';
+import { huntContacts } from '@/lib/scrapers/contact-hunter';
 
 /**
- * Round 2: Contact Verification
+ * Round 2: Contact Verification + Deep Contact Hunting
+ * - If lead has no email → run 12-layer contact hunter to find one
  * - Email domain MX record check
  * - LinkedIn URL format validation
  * - Flag "needs decision maker" if only company LinkedIn but no personal contact
@@ -11,6 +13,47 @@ export async function runRound2(
 ): Promise<{ checks: VerificationCheck[]; disqualify: boolean; disqualifyReason?: string }> {
   const checks: VerificationCheck[] = [];
   let hasValidContact = false;
+
+  // Check 0: If no email, run contact hunter to find one
+  if (!lead.contact_email && lead.website) {
+    try {
+      const hunted = await huntContacts(lead.website, lead.company_name, lead.contact_name);
+
+      const bestEmail = hunted.emails.find(e => e.confidence >= 50);
+      if (bestEmail) {
+        lead.contact_email = bestEmail.email; // Will be saved by pipeline
+        checks.push({
+          name: 'contact_hunter_email',
+          result: 'pass',
+          detail: `找到邮箱: ${bestEmail.email} (来源: ${bestEmail.source}, 置信度: ${bestEmail.confidence}%)`,
+        });
+      }
+
+      // Update LinkedIn if found
+      if (!lead.contact_linkedin) {
+        const li = hunted.social.find(s => s.platform === 'linkedin');
+        if (li) {
+          lead.contact_linkedin = li.url;
+          checks.push({ name: 'contact_hunter_linkedin', result: 'pass', detail: `找到LinkedIn: ${li.url}` });
+        }
+      }
+
+      // Save phone and address if found
+      if (hunted.phones.length > 0) {
+        checks.push({ name: 'contact_hunter_phone', result: 'pass', detail: `找到电话: ${hunted.phones[0].phone}`, data: { phone: hunted.phones[0].phone } });
+      }
+      if (hunted.addresses.length > 0) {
+        checks.push({ name: 'contact_hunter_address', result: 'pass', detail: `找到地址: ${hunted.addresses[0].address}`, data: { address: hunted.addresses[0].address } });
+      }
+      if (hunted.contacts.length > 0) {
+        checks.push({ name: 'contact_hunter_people', result: 'pass', detail: `找到联系人: ${hunted.contacts.map(c => c.name + '(' + c.title + ')').join(', ')}`, data: { contacts: hunted.contacts } });
+      }
+
+      checks.push({ name: 'contact_hunter_summary', result: hunted.emails.length > 0 ? 'pass' : 'warn', detail: `扫描${hunted.pages_scanned}页，找到${hunted.emails.length}个邮箱，${hunted.phones.length}个电话，使用方法: ${hunted.methods_used.join(', ')}` });
+    } catch {
+      checks.push({ name: 'contact_hunter', result: 'skip', detail: '联系方式猎手运行失败' });
+    }
+  }
 
   // Check 1: Email domain MX validation
   if (lead.contact_email) {
