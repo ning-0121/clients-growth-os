@@ -159,7 +159,8 @@ function LeadRow({ lead }: { lead: any }) {
     : null;
 
   return (
-    <div className={`border rounded-lg p-3 flex items-center gap-3 ${
+    <Link href={`/growth/leads/${lead.id}`} className="block">
+    <div className={`border rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors ${
       lead.escalation_level >= 2 ? 'border-purple-200 bg-purple-50/30' :
       lead.reactivation_needed ? 'border-red-200 bg-red-50/30' :
       lead.category === 'A' ? 'border-green-200' : 'border-gray-100'
@@ -179,10 +180,8 @@ function LeadRow({ lead }: { lead: any }) {
 
       {/* Main info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <Link href={`/growth/leads/${lead.id}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate">
-            {lead.company_name}
-          </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-gray-900">{lead.company_name}</span>
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${GRADE_COLORS[lead.grade || 'C']}`}>{lead.grade}</span>
           <span className="text-xs text-gray-400">{SOURCE_LABELS[lead.source] || lead.source}</span>
           {lead.escalation_level >= 1 && <span className="text-xs bg-purple-100 text-purple-700 px-1 py-0.5 rounded">升级</span>}
@@ -203,5 +202,6 @@ function LeadRow({ lead }: { lead: any }) {
         </div>
       </div>
     </div>
+    </Link>
   );
 }
