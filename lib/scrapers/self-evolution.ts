@@ -65,13 +65,23 @@ const GITHUB_SEARCHES = [
 // Tech blog/community searches for latest techniques
 const TECHNIQUE_SEARCHES = [
   '"email finding" technique 2025 2026',
-  '"lead generation" new tool API 2025',
-  '"web scraping" bypass block 2025',
-  '"b2b sales" automation AI 2025',
-  '"contact enrichment" API free',
-  '"cold outreach" best practice 2025',
-  'find anyone email address method',
-  'scrape company data without API',
+  '"lead generation" new tool API 2025 2026',
+  '"web scraping" bypass block 2025 2026',
+  '"b2b sales" automation AI 2025 2026',
+  '"contact enrichment" API free 2025',
+  '"cold outreach" best practice 2025 2026',
+  'find anyone email address method 2025',
+  'scrape company data without API 2025',
+  '"find decision maker" email tool',
+  '"linkedin scraper" open source 2025',
+  'email hunter alternative free 2025',
+  '"shopify store" scraper tool 2025',
+  '"instagram brand" finder scraper',
+  'b2b contact database free API',
+  '"company info" API free enrichment',
+  '"phone number" finder business API',
+  'apparel brand database list 2025',
+  'activewear brand directory list',
 ];
 
 /**
@@ -254,10 +264,113 @@ export async function runSelfEvolution(
     });
   }
 
+  // Phase 3: Auto-learn — extract new search queries from techniques
+  const learnedQueries: string[] = [];
+  for (const tech of techniques) {
+    if (tech.snippet) {
+      // Extract useful search patterns from technique articles
+      const patterns = extractSearchPatternsFromText(tech.snippet + ' ' + tech.title);
+      learnedQueries.push(...patterns);
+    }
+  }
+
+  // Phase 4: Search for free email/contact APIs and try them
+  const newAPIs = await discoverFreeAPIs();
+
+  // Store everything
+  const allDiscoveries = {
+    tools: toolsToStore,
+    techniques: techniques.slice(0, 5),
+    github_queries: ghQueries,
+    learned_queries: learnedQueries,
+    new_apis: newAPIs,
+  };
+
+  await supabase.from('discovery_runs').insert({
+    source: 'self_evolution',
+    query_used: ghQueries.join(' | '),
+    urls_found: allTools.length + techniques.length,
+    urls_new: toolsToStore.length + learnedQueries.length,
+    metadata: allDiscoveries,
+  });
+
   return {
     tools_discovered: allTools.length,
     tools_relevant: toolsToStore.filter(t => t.relevance_score >= 60).length,
     techniques_found: techniques.length,
+    learned_queries: learnedQueries.length,
+    new_apis_found: newAPIs.length,
     top_discoveries: toolsToStore.slice(0, 5),
   };
+}
+
+/**
+ * Extract actionable search patterns from technique article text.
+ * E.g., if an article mentions "use site:apollo.io to find contacts",
+ * we learn a new search pattern.
+ */
+function extractSearchPatternsFromText(text: string): string[] {
+  const patterns: string[] = [];
+  const lower = text.toLowerCase();
+
+  // Learn new data sources mentioned in articles
+  const sourcePatterns = [
+    { keyword: 'apollo.io', query: 'site:apollo.io activewear brand contact' },
+    { keyword: 'rocketreach', query: '"rocketreach" activewear contact email' },
+    { keyword: 'clearbit', query: '"clearbit" company enrichment activewear' },
+    { keyword: 'zoominfo', query: 'site:zoominfo.com sportswear brand' },
+    { keyword: 'crunchbase', query: 'site:crunchbase.com activewear sportswear' },
+    { keyword: 'pitchbook', query: 'site:pitchbook.com fitness apparel brand' },
+    { keyword: 'owler', query: 'site:owler.com activewear brand revenue' },
+    { keyword: 'craft.co', query: 'site:craft.co sportswear brand' },
+    { keyword: 'datanyze', query: '"datanyze" shopify activewear store' },
+    { keyword: 'builtwith', query: 'site:builtwith.com shopify activewear' },
+    { keyword: 'similarweb', query: 'site:similarweb.com activewear brand traffic' },
+    { keyword: 'tradeshow', query: 'activewear trade show exhibitor list 2025 2026' },
+    { keyword: 'trade show', query: 'sportswear expo exhibitor directory' },
+  ];
+
+  for (const sp of sourcePatterns) {
+    if (lower.includes(sp.keyword)) {
+      patterns.push(sp.query);
+    }
+  }
+
+  // Learn new email finding techniques mentioned
+  if (lower.includes('hunter.io') || lower.includes('email finder')) {
+    patterns.push('"email finder" free alternative 2025');
+  }
+  if (lower.includes('linkedin sales navigator')) {
+    patterns.push('linkedin sales navigator activewear brand sourcing');
+  }
+
+  return [...new Set(patterns)].slice(0, 5);
+}
+
+/**
+ * Discover free APIs that could enhance our contact finding
+ */
+async function discoverFreeAPIs(): Promise<{ name: string; url: string; description: string }[]> {
+  const apis: { name: string; url: string; description: string }[] = [];
+
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return apis;
+
+  try {
+    const query = 'free email finder API 2025 no signup';
+    const url = `https://serpapi.com/search.json?api_key=${apiKey}&q=${encodeURIComponent(query)}&num=5&engine=google`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return apis;
+    const data = await res.json();
+
+    for (const r of (data.organic_results || []).slice(0, 3)) {
+      apis.push({
+        name: r.title?.slice(0, 60) || '',
+        url: r.link || '',
+        description: r.snippet?.slice(0, 150) || '',
+      });
+    }
+  } catch {}
+
+  return apis;
 }
