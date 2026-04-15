@@ -53,6 +53,18 @@ const SKIP_DOMAINS = [
   'alibaba.com', 'aliexpress.com', 'dhgate.com', 'made-in-china.com',
   'wish.com', 'shein.com', 'temu.com',
 
+  // Big brands (too large, not our target — they have their own supply chain)
+  'nike.com', 'adidas.com', 'puma.com', 'reebok.com', 'newbalance.com',
+  'underarmour.com', 'lululemon.com', 'gymshark.com', 'fabletics.com',
+  'vuoriclothing.com', 'vuori.com', 'alo.com', 'aloyoga.com',
+  'gap.com', 'oldnavy.com', 'athleta.com', 'bananarepublic.com',
+  'hm.com', 'zara.com', 'uniqlo.com', 'forever21.com',
+  'patagonia.com', 'thenorthface.com', 'columbia.com',
+  'champion.com', 'fila.com', 'asics.com', 'mizuno.com',
+  'onrunning.com', 'hoka.com', 'brooksrunning.com',
+  'skims.com', 'aritzia.com', 'revolve.com',
+  'nordstrom.com', 'macys.com', 'dickssportinggoods.com', 'rei.com',
+
   // Review / directory / list sites
   'trustpilot.com', 'yelp.com', 'glassdoor.com', 'bbb.org',
   'crunchbase.com', 'zoominfo.com', 'dnb.com',
