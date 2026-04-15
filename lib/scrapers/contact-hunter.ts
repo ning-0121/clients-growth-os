@@ -19,6 +19,7 @@ export interface ContactFinderResult {
   phones: { phone: string; source: string }[];
   social: { platform: string; url: string }[];
   contacts: { name: string; title: string; email?: string; linkedin?: string }[];
+  addresses: { address: string; source: string }[];
   methods_used: string[];
   pages_scanned: number;
 }
@@ -377,6 +378,201 @@ function commonBusinessEmails(domain: string): string[] {
 }
 
 /**
+ * Method 6: Extract Schema.org structured data (Organization, LocalBusiness)
+ * Many websites embed their address/phone/email in JSON-LD structured data
+ */
+function extractSchemaData(html: string): {
+  emails: string[]; phones: string[]; address: string; name: string;
+} {
+  const result = { emails: [] as string[], phones: [] as string[], address: '', name: '' };
+  try {
+    const $ = cheerio.load(html);
+    $('script[type="application/ld+json"]').each((_, el) => {
+      try {
+        const json = JSON.parse($(el).html() || '');
+        const items = Array.isArray(json) ? json : [json];
+        for (const item of items) {
+          if (item.email) result.emails.push(String(item.email).replace('mailto:', '').toLowerCase());
+          if (item.telephone) result.phones.push(String(item.telephone));
+          if (item.address) {
+            const a = typeof item.address === 'string' ? item.address :
+              [item.address.streetAddress, item.address.addressLocality, item.address.addressRegion, item.address.postalCode, item.address.addressCountry].filter(Boolean).join(', ');
+            if (a) result.address = a;
+          }
+          if (item.name) result.name = String(item.name);
+          // Check nested contactPoint
+          if (item.contactPoint) {
+            const cp = Array.isArray(item.contactPoint) ? item.contactPoint : [item.contactPoint];
+            for (const c of cp) {
+              if (c.email) result.emails.push(String(c.email).replace('mailto:', '').toLowerCase());
+              if (c.telephone) result.phones.push(String(c.telephone));
+            }
+          }
+        }
+      } catch {}
+    });
+  } catch {}
+  return result;
+}
+
+/**
+ * Method 7: Scrape footer specifically — nearly all sites put address/phone in footer
+ */
+function extractFooterInfo($: cheerio.CheerioAPI): {
+  emails: string[]; phones: string[]; address: string;
+} {
+  const result = { emails: [] as string[], phones: [] as string[], address: '' };
+  const footerText = $('footer').text() || '';
+
+  // Emails in footer
+  const footerEmails = footerText.match(EMAIL_RE) || [];
+  result.emails = footerEmails.map(e => e.toLowerCase()).filter(isValidEmail);
+
+  // Phones in footer
+  const footerPhones = footerText.match(PHONE_RE) || [];
+  result.phones = footerPhones.map(p => p.trim());
+
+  // International phone (with +country code)
+  const intlPhone = footerText.match(/\+\d{1,3}[\s.-]?\d{2,4}[\s.-]?\d{3,4}[\s.-]?\d{3,4}/g) || [];
+  result.phones.push(...intlPhone.map(p => p.trim()));
+
+  // Address patterns in footer
+  const addressPatterns = [
+    // US address
+    /\d{1,5}\s+[\w\s]+(?:St|Street|Ave|Avenue|Blvd|Boulevard|Rd|Road|Dr|Drive|Ln|Lane|Way|Ct|Court)[\s,]+[\w\s]+,\s*[A-Z]{2}\s+\d{5}/i,
+    // UK postcode
+    /[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}/i,
+    // General: City, State/Country
+    /[\w\s]+,\s*[\w\s]+,\s*[\w\s]+\s+\d{4,6}/,
+  ];
+  for (const pattern of addressPatterns) {
+    const match = footerText.match(pattern);
+    if (match) { result.address = match[0].trim(); break; }
+  }
+
+  return result;
+}
+
+/**
+ * Method 8: Privacy Policy / Terms / Legal pages (GDPR requires contact info)
+ */
+async function scrapeLegalPages(baseUrl: string): Promise<{
+  emails: string[]; address: string; dpo_contact: string;
+}> {
+  const result = { emails: [] as string[], address: '', dpo_contact: '' };
+  const base = baseUrl.replace(/\/$/, '');
+
+  const legalPaths = [
+    '/privacy', '/privacy-policy', '/pages/privacy-policy',
+    '/terms', '/terms-of-service', '/pages/terms-of-service',
+    '/legal', '/imprint', '/impressum', // German law requires full contact
+  ];
+
+  for (const path of legalPaths.slice(0, 3)) { // Max 3 pages
+    const html = await fetchPage(`${base}${path}`);
+    if (!html) continue;
+
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const emails = text.match(EMAIL_RE) || [];
+    result.emails.push(...emails.map(e => e.toLowerCase()).filter(isValidEmail));
+
+    // DPO / Data Protection Officer contact (GDPR)
+    const dpoMatch = text.match(/(?:data protection officer|DPO|privacy officer|datenschutzbeauftragter)[^.]*?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (dpoMatch) result.dpo_contact = dpoMatch[1].toLowerCase();
+
+    // Address from legal pages (very common in imprint/impressum)
+    const addressMatch = text.match(/(?:registered (?:address|office)|address|Anschrift|siège social)[:\s]+([^.]{10,100})/i);
+    if (addressMatch) result.address = addressMatch[1].trim();
+
+    break; // One legal page is usually enough
+  }
+
+  return { ...result, emails: [...new Set(result.emails)] };
+}
+
+/**
+ * Method 9: Google Maps / business listing search
+ */
+async function searchGoogleMaps(companyName: string): Promise<{
+  address: string; phone: string;
+}> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return { address: '', phone: '' };
+
+  try {
+    const query = `${companyName} apparel clothing`;
+    const url = `https://serpapi.com/search.json?api_key=${apiKey}&q=${encodeURIComponent(query)}&engine=google_maps&type=search`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const place = data.local_results?.[0] || data.place_results;
+    if (place) {
+      return {
+        address: place.address || '',
+        phone: place.phone || '',
+      };
+    }
+  } catch {}
+
+  return { address: '', phone: '' };
+}
+
+/**
+ * Method 10: WHOIS domain lookup — often has registrant email
+ */
+async function whoisLookup(domain: string): Promise<{
+  registrant_email: string; registrant_name: string; registrant_org: string;
+}> {
+  const result = { registrant_email: '', registrant_name: '', registrant_org: '' };
+
+  try {
+    // Use a free WHOIS API
+    const res = await fetch(`https://api.whoapi.com/?apikey=free&r=whois&domain=${encodeURIComponent(domain)}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json();
+
+    if (data.contacts) {
+      for (const contact of data.contacts) {
+        if (contact.email && isValidEmail(contact.email.toLowerCase())) {
+          result.registrant_email = contact.email.toLowerCase();
+        }
+        if (contact.name) result.registrant_name = contact.name;
+        if (contact.organization) result.registrant_org = contact.organization;
+      }
+    }
+  } catch {}
+
+  // Fallback: try another free WHOIS source
+  if (!result.registrant_email) {
+    try {
+      const res = await fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
+        signal: AbortSignal.timeout(5000),
+        headers: { Accept: 'application/json' },
+      });
+      const data = await res.json();
+
+      // RDAP format
+      for (const entity of (data.entities || [])) {
+        const vcard = entity.vcardArray?.[1];
+        if (vcard) {
+          for (const field of vcard) {
+            if (field[0] === 'email' && field[3]) {
+              const email = String(field[3]).toLowerCase();
+              if (isValidEmail(email)) result.registrant_email = email;
+            }
+            if (field[0] === 'fn' && field[3]) result.registrant_name = String(field[3]);
+            if (field[0] === 'org' && field[3]) result.registrant_org = String(field[3]);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return result;
+}
+
+/**
  * MAIN: Run all contact finding methods
  */
 export async function huntContacts(
@@ -389,6 +585,7 @@ export async function huntContacts(
     phones: [],
     social: [],
     contacts: [],
+    addresses: [],
     methods_used: [],
     pages_scanned: 0,
   };
@@ -397,7 +594,7 @@ export async function huntContacts(
 
   const domain = extractDomain(website);
 
-  // Method 1: Deep website scan (parallel-safe, runs first)
+  // Method 1: Deep website scan + Schema.org + Footer extraction
   const websiteData = await deepWebsiteScan(website);
   result.pages_scanned = websiteData.pagesScanned;
   result.methods_used.push(`deep_scan(${websiteData.pagesScanned}pages)`);
@@ -419,6 +616,95 @@ export async function huntContacts(
 
   // Add contacts
   result.contacts = websiteData.contacts.map(c => ({ ...c }));
+
+  // Method 6+7: Schema.org + Footer extraction (from homepage HTML)
+  try {
+    const homepageHtml = await fetchPage(website);
+    if (homepageHtml) {
+      // Schema.org structured data
+      const schema = extractSchemaData(homepageHtml);
+      for (const email of schema.emails) {
+        if (isValidEmail(email) && !result.emails.find(e => e.email === email)) {
+          result.emails.push({ email, source: 'schema.org', confidence: emailConfidence(email, domain) });
+        }
+      }
+      for (const phone of schema.phones) {
+        if (!result.phones.find(p => p.phone === phone)) {
+          result.phones.push({ phone, source: 'schema.org' });
+        }
+      }
+      if (schema.address) result.addresses.push({ address: schema.address, source: 'schema.org' });
+
+      // Footer extraction
+      const $home = cheerio.load(homepageHtml);
+      const footer = extractFooterInfo($home);
+      for (const email of footer.emails) {
+        if (!result.emails.find(e => e.email === email)) {
+          result.emails.push({ email, source: 'footer', confidence: emailConfidence(email, domain) });
+        }
+      }
+      for (const phone of footer.phones) {
+        if (!result.phones.find(p => p.phone === phone)) {
+          result.phones.push({ phone, source: 'footer' });
+        }
+      }
+      if (footer.address && !result.addresses.find(a => a.address === footer.address)) {
+        result.addresses.push({ address: footer.address, source: 'footer' });
+      }
+
+      result.methods_used.push('schema+footer');
+    }
+  } catch {}
+
+  // Method 8: Legal pages (privacy/terms/imprint — GDPR requires contact)
+  try {
+    const legalData = await scrapeLegalPages(website);
+    for (const email of legalData.emails) {
+      if (!result.emails.find(e => e.email === email)) {
+        result.emails.push({ email, source: 'legal_page', confidence: emailConfidence(email, domain) });
+      }
+    }
+    if (legalData.address && !result.addresses.find(a => a.source === 'legal_page')) {
+      result.addresses.push({ address: legalData.address, source: 'legal_page' });
+    }
+    if (legalData.dpo_contact) {
+      if (!result.emails.find(e => e.email === legalData.dpo_contact)) {
+        result.emails.push({ email: legalData.dpo_contact, source: 'dpo_legal', confidence: 60 });
+      }
+    }
+    if (legalData.emails.length > 0) result.methods_used.push('legal_pages');
+  } catch {}
+
+  // Method 9: Google Maps (address + phone)
+  if (result.addresses.length === 0 || result.phones.length === 0) {
+    try {
+      const maps = await searchGoogleMaps(companyName);
+      if (maps.address) result.addresses.push({ address: maps.address, source: 'google_maps' });
+      if (maps.phone && !result.phones.find(p => p.phone === maps.phone)) {
+        result.phones.push({ phone: maps.phone, source: 'google_maps' });
+      }
+      if (maps.address || maps.phone) result.methods_used.push('google_maps');
+    } catch {}
+  }
+
+  // Method 10: WHOIS domain lookup
+  try {
+    const whois = await whoisLookup(domain);
+    if (whois.registrant_email && !result.emails.find(e => e.email === whois.registrant_email)) {
+      result.emails.push({ email: whois.registrant_email, source: 'whois', confidence: 55 });
+    }
+    if (whois.registrant_name && !result.contacts.find(c => c.name === whois.registrant_name)) {
+      result.contacts.push({ name: whois.registrant_name, title: 'Domain Owner' });
+      // Guess email from WHOIS name
+      const guesses = guessEmailPatterns(domain, whois.registrant_name);
+      for (const guess of guesses.slice(0, 2)) {
+        if (!result.emails.find(e => e.email === guess)) {
+          result.emails.push({ email: guess, source: `whois_guess:${whois.registrant_name}`, confidence: 45 });
+        }
+      }
+    }
+    if (whois.registrant_email || whois.registrant_name) result.methods_used.push('whois');
+  } catch {}
 
   // Method 2: Email pattern guessing (if we have a contact name)
   if (contactName && domain) {
