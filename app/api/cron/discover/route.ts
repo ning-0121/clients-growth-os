@@ -4,6 +4,8 @@ import { discoverLeads } from '@/lib/scrapers/google-discovery';
 import { discoverFromBing } from '@/lib/scrapers/duckduckgo-discovery';
 import { discoverFromSocialAndEcom } from '@/lib/scrapers/social-ecom-discovery';
 import { learnFromWonDeals, expandSearchScope } from '@/lib/scrapers/search-intelligence';
+import { planDailyMission, getRecentlyUsedQueries, deduplicateQueries, getLeadsForReEnrichment } from '@/lib/scrapers/daily-mission-planner';
+import { huntContacts } from '@/lib/scrapers/contact-hunter';
 import { enqueueUrls } from '@/lib/scrapers/source-queue';
 import { extractDomain } from '@/lib/growth/lead-engine';
 
@@ -119,6 +121,49 @@ export async function POST(request: Request) {
       results.self_learning = { error: err.message };
     }
 
+    // Phase 3: Daily mission — today's unique focus direction
+    const mission = planDailyMission();
+    results.daily_mission = {
+      theme: mission.theme,
+      day_of_cycle: mission.day_of_cycle,
+      product_focus: mission.product_focus,
+      market_focus: mission.market_focus,
+    };
+
+    // Phase 4: Re-enrich old leads that are missing contact info
+    let reEnriched = 0;
+    try {
+      const leadsToReEnrich = await getLeadsForReEnrichment(supabase, mission.re_enrich_count);
+      for (const lead of leadsToReEnrich) {
+        try {
+          const contacts = await huntContacts(lead.website, lead.company_name, lead.contact_name);
+          const bestEmail = contacts.emails.find(e => e.confidence >= 50);
+          if (bestEmail) {
+            await supabase.from('growth_leads')
+              .update({
+                contact_email: bestEmail.email,
+                probability_updated_at: new Date().toISOString(),
+              })
+              .eq('id', lead.id)
+              .is('contact_email', null); // Only update if still null
+            reEnriched++;
+          }
+          // Also update LinkedIn if found
+          if (!lead.contact_linkedin) {
+            const li = contacts.social.find(s => s.platform === 'linkedin');
+            if (li) {
+              await supabase.from('growth_leads')
+                .update({ contact_linkedin: li.url })
+                .eq('id', lead.id);
+            }
+          }
+        } catch {}
+      }
+      results.re_enrichment = { attempted: leadsToReEnrich.length, found_email: reEnriched };
+    } catch (err: any) {
+      results.re_enrichment = { error: err.message };
+    }
+
     const totalNew = (results.google?.urls_new || 0) + (results.bing?.urls_new || 0) +
       (results.social_ecom?.urls_new || 0) + learnedNew;
     const totalFound = (results.google?.urls_found || 0) + (results.bing?.urls_found || 0) +
@@ -128,6 +173,7 @@ export async function POST(request: Request) {
       success: true,
       total_found: totalFound,
       total_new: totalNew,
+      re_enriched: reEnriched,
       sources: results,
     });
   } catch (err: any) {
