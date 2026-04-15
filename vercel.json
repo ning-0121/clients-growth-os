@@ -29,6 +29,10 @@
       "schedule": "23 * * * *"
     },
     {
+      "path": "/api/cron/evolve",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/agents/outbound",
       "schedule": "0 8,14,20 * * *"
     },
