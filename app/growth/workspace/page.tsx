@@ -38,6 +38,31 @@ export default async function WorkspacePage() {
     .eq('status', 'active')
     .lte('next_send_at', nowIso);
 
+  // System auto-discovery stats (today)
+  const today = now.toISOString().split('T')[0];
+  const { data: todayRuns } = await supabase
+    .from('discovery_runs')
+    .select('urls_found, urls_new')
+    .gte('created_at', today + 'T00:00:00');
+
+  const todayDiscovered = (todayRuns || []).reduce((sum: number, r: any) => sum + (r.urls_new || 0), 0);
+
+  const { count: todayNewLeads } = await supabase
+    .from('growth_leads')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', today + 'T00:00:00');
+
+  const { count: queuePending } = await supabase
+    .from('lead_source_queue')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending');
+
+  // Total system leads
+  const { count: totalLeads } = await supabase
+    .from('growth_leads')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['new', 'qualified', 'converted']);
+
   // Bucketing
   const buckets = {
     overdue: [] as typeof leads,
@@ -81,7 +106,35 @@ export default async function WorkspacePage() {
           </p>
         </div>
 
-        {/* Metric cards */}
+        {/* System auto-discovery summary */}
+        <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-indigo-900">AI 自动开发引擎</h2>
+            <span className="flex items-center gap-1 text-xs text-green-600">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> 24h 运行中
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="text-center">
+              <div className="text-lg font-bold text-indigo-700">{todayDiscovered}</div>
+              <div className="text-xs text-gray-500">今日发现</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-blue-700">{todayNewLeads || 0}</div>
+              <div className="text-xs text-gray-500">今日入库</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-amber-700">{queuePending || 0}</div>
+              <div className="text-xs text-gray-500">队列待处理</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-gray-700">{totalLeads || 0}</div>
+              <div className="text-xs text-gray-500">客户总数</div>
+            </div>
+          </div>
+        </div>
+
+        {/* My tasks */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <MetricCard label="待跟进" sublabel="逾期需处理" value={overdueCount} color={overdueCount > 0 ? 'text-red-600' : 'text-gray-600'} border={overdueCount > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200'} />
           <MetricCard label="待首触" sublabel="新客户" value={firstTouchCount} color="text-amber-600" border="border-amber-200" />
@@ -128,8 +181,26 @@ export default async function WorkspacePage() {
             <p className="text-gray-400 text-xs mt-1">系统正在 24 小时自动发现新客户...</p>
           </div>
         )}
+
+        {/* Quick links */}
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <QuickLink href="/growth/leads" label="客户瀑布流" desc="查看所有客户" icon="👥" />
+          <QuickLink href="/growth/deals" label="成交中心" desc="跟进商机" icon="💰" />
+          <QuickLink href="/growth/service" label="客服中心" desc="查看对话" icon="💬" />
+          <QuickLink href="/growth/analytics" label="数据中心" desc="查看数据" icon="📊" />
+        </div>
       </div>
     </div>
+  );
+}
+
+function QuickLink({ href, label, desc, icon }: { href: string; label: string; desc: string; icon: string }) {
+  return (
+    <Link href={href} className="bg-white rounded-lg border border-gray-200 p-3 hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors text-center">
+      <div className="text-lg mb-1">{icon}</div>
+      <div className="text-xs font-medium text-gray-900">{label}</div>
+      <div className="text-xs text-gray-400">{desc}</div>
+    </Link>
   );
 }
 
