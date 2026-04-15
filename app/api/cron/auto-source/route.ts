@@ -46,7 +46,9 @@ export async function POST(request: Request) {
     const systemUserId = process.env.SYSTEM_USER_ID || '';
 
     // Dequeue items from the source queue (20 per hour)
-    const items = await dequeueItems(20, supabase);
+    // 5 items per run to stay within Vercel 60s timeout
+    // With Pro plan cron every 10min = 30 items/hour = 720/day
+    const items = await dequeueItems(5, supabase);
 
     if (items.length === 0) {
       return NextResponse.json({ success: true, message: 'Queue empty', processed: 0 });
@@ -92,36 +94,10 @@ export async function POST(request: Request) {
           continue;
         }
 
-        // Deep contact hunting — if basic enrichment didn't find email, dig deeper
+        // Use enricher results directly (deep hunting moved to re-enrichment cron for speed)
         let contactEmail = result.contact_email;
         let contactLinkedin = result.contact_linkedin;
         let igHandle = result.instagram_handle;
-
-        if (!contactEmail) {
-          try {
-            const hunted = await huntContacts(cleanedUrl, result.company_name);
-            // Take the highest confidence email
-            const bestEmail = hunted.emails.find(e => e.confidence >= 50);
-            if (bestEmail) contactEmail = bestEmail.email;
-
-            // Get LinkedIn if not found by enricher
-            if (!contactLinkedin) {
-              const li = hunted.social.find(s => s.platform === 'linkedin');
-              if (li) contactLinkedin = li.url;
-            }
-
-            // Get IG if not found
-            if (!igHandle) {
-              const ig = hunted.social.find(s => s.platform === 'instagram');
-              if (ig) {
-                const match = ig.url.match(/instagram\.com\/([a-zA-Z0-9_.]+)/);
-                if (match) igHandle = match[1];
-              }
-            }
-          } catch {
-            // Non-critical — continue with what enricher found
-          }
-        }
 
         // Convert to RawLeadInput
         const source: LeadSource = (VALID_LEAD_SOURCES.includes(item.source as LeadSource))
