@@ -6,7 +6,18 @@ interface Props {
   lead: any;
 }
 
+interface ResearchSummary {
+  pages_scanned: number;
+  products_found: number;
+  has_google_intel: boolean;
+  has_linkedin_intel: boolean;
+  has_customs_data: boolean;
+  price_range: string;
+  employee_estimate: string;
+}
+
 interface StrategyBundle {
+  research_summary?: ResearchSummary | null;
   analysis: {
     company_summary: string;
     strengths: string[];
@@ -119,16 +130,54 @@ export default function CustomerDetailCard({ lead }: Props) {
 
             {/* AI analysis (load on demand) */}
             {!strategy && !loading && (
-              <button onClick={loadStrategy} className="w-full py-2 text-sm text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
-                生成 AI 深度分析 + 开发策略
+              <button onClick={loadStrategy} className="w-full py-3 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+                AI 深度调研 + 生成开发策略
               </button>
             )}
 
-            {loading && <p className="text-sm text-gray-400 text-center py-4">AI 正在分析客户并制定策略...</p>}
+            {loading && (
+              <div className="text-center py-6">
+                <div className="text-sm text-gray-500 mb-2">AI 正在调研这个客户...</div>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p>1. 扫描客户网站多个页面（产品、价格、团队）</p>
+                  <p>2. Google 搜索公司信息和评价</p>
+                  <p>3. LinkedIn 查询公司规模和招聘</p>
+                  <p>4. 交叉验证海关贸易数据</p>
+                  <p>5. 生成定制化开发策略和话术</p>
+                </div>
+              </div>
+            )}
             {error && <p className="text-sm text-red-600 text-center py-2">{error}</p>}
 
             {strategy && (
               <div className="space-y-3">
+                {/* Research sources badges */}
+                {strategy.research_summary && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {strategy.research_summary.pages_scanned > 0 && (
+                      <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">网站扫描 {strategy.research_summary.pages_scanned} 页</span>
+                    )}
+                    {strategy.research_summary.products_found > 0 && (
+                      <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">发现 {strategy.research_summary.products_found} 个产品</span>
+                    )}
+                    {strategy.research_summary.has_google_intel && (
+                      <span className="text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded">Google 情报</span>
+                    )}
+                    {strategy.research_summary.has_linkedin_intel && (
+                      <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">LinkedIn 情报</span>
+                    )}
+                    {strategy.research_summary.has_customs_data && (
+                      <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">海关数据</span>
+                    )}
+                    {strategy.research_summary.price_range && (
+                      <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded">零售价 {strategy.research_summary.price_range}</span>
+                    )}
+                    {strategy.research_summary.employee_estimate && (
+                      <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{strategy.research_summary.employee_estimate}</span>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-blue-50 rounded-lg p-3">
                   <div className="text-xs font-medium text-blue-800 mb-1">AI 分析摘要</div>
                   <p className="text-sm text-blue-900">{strategy.analysis.company_summary}</p>
