@@ -62,7 +62,7 @@ export default async function LeadsPoolPage() {
       <GrowthNavbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900">客户池</h1>
+          <h1 className="text-xl font-bold text-gray-900">客户瀑布流</h1>
           <p className="text-sm text-gray-500 mt-1">
             所有客户的全景视图 — 共 {activeLeads.length} 个活跃客户
           </p>

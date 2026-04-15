@@ -69,7 +69,7 @@ export default function GrowthNavbar() {
 
   const links: { href: string; label: string; show: boolean }[] = [
     { href: '/growth/workspace', label: '工作台', show: isSales },
-    { href: '/growth/leads', label: '客户池', show: isSales },
+    { href: '/growth/leads', label: '客户瀑布流', show: isSales },
     { href: '/growth/deals', label: '成交中心', show: isSales },
     { href: '/growth/service', label: '客服中心', show: isSales },
     { href: '/growth/analytics', label: '数据中心', show: isAdmin },
