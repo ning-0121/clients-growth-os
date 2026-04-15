@@ -46,9 +46,9 @@ export async function POST(request: Request) {
     const systemUserId = process.env.SYSTEM_USER_ID || '';
 
     // Dequeue items from the source queue (20 per hour)
-    // 5 items per run to stay within Vercel 60s timeout
-    // With Pro plan cron every 10min = 30 items/hour = 720/day
-    const items = await dequeueItems(5, supabase);
+    // 3 items per run — each takes ~15s (fetch + AI analysis)
+    // Pro plan every 10min = 18/hour = 432/day
+    const items = await dequeueItems(3, supabase);
 
     if (items.length === 0) {
       return NextResponse.json({ success: true, message: 'Queue empty', processed: 0 });
