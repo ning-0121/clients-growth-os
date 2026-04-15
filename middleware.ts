@@ -53,14 +53,14 @@ export async function middleware(request: NextRequest) {
   // Root redirect
   if (pathname === '/') {
     const url = request.nextUrl.clone();
-    url.pathname = user ? '/growth/my-today' : '/login';
+    url.pathname = user ? '/growth/workspace' : '/login';
     return NextResponse.redirect(url);
   }
 
   // Already logged in → redirect away from login
   if (pathname === '/login' && user) {
     const url = request.nextUrl.clone();
-    url.pathname = '/growth/my-today';
+    url.pathname = '/growth/workspace';
     return NextResponse.redirect(url);
   }
 

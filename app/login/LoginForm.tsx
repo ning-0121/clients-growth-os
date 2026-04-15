@@ -30,7 +30,7 @@ export default function LoginForm() {
         return;
       }
 
-      window.location.href = '/growth/my-today';
+      window.location.href = '/growth/workspace';
     } else {
       // ── Register ──
       const name = formData.get('name') as string;
@@ -63,7 +63,7 @@ export default function LoginForm() {
         });
       }
 
-      window.location.href = '/growth/my-today';
+      window.location.href = '/growth/workspace';
     }
   };
 
