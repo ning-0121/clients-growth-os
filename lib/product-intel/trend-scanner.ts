@@ -390,11 +390,11 @@ export async function runFullProductScan(
   const [crowdfund, tiktok, gaps, fabrics, funded] = channelResults as [CrowdfundBrand[], TikTokOpportunity[], SupplyGap[], FabricTrend[], number];
 
   const report: Omit<ProductIntelReport, 'ai_recommendations'> = {
-    crowdfund_brands: crowdfund.status === 'fulfilled' ? crowdfund.value : [],
-    tiktok_opportunities: tiktok.status === 'fulfilled' ? tiktok.value : [],
-    supply_gaps: gaps.status === 'fulfilled' ? gaps.value : [],
-    fabric_trends: fabrics.status === 'fulfilled' ? fabrics.value : [],
-    funded_brands_enqueued: funded.status === 'fulfilled' ? funded.value : 0,
+    crowdfund_brands: Array.isArray(crowdfund) ? crowdfund : [],
+    tiktok_opportunities: Array.isArray(tiktok) ? tiktok : [],
+    supply_gaps: Array.isArray(gaps) ? gaps : [],
+    fabric_trends: Array.isArray(fabrics) ? fabrics : [],
+    funded_brands_enqueued: typeof funded === 'number' ? funded : 0,
   };
 
   // AI analyze all data and generate recommendations
