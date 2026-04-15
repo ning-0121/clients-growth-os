@@ -29,6 +29,10 @@
       "schedule": "23 * * * *"
     },
     {
+      "path": "/api/cron/product-intel",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/evolve",
       "schedule": "0 3 * * *"
     },

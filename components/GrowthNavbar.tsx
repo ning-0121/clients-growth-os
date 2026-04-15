@@ -72,6 +72,7 @@ export default function GrowthNavbar() {
     { href: '/growth/leads', label: '客户瀑布流', show: isSales },
     { href: '/growth/deals', label: '成交中心', show: isSales },
     { href: '/growth/service', label: '客服中心', show: isSales },
+    { href: '/growth/products', label: '新品发现', show: isSales },
     { href: '/growth/analytics', label: '数据中心', show: isAdmin },
   ];
 
