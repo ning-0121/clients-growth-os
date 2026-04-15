@@ -34,7 +34,7 @@ export async function scanAllRisks(supabase: SupabaseClient): Promise<RiskAlert[
   // Get all active leads with their deal info
   const { data: leads } = await supabase
     .from('growth_leads')
-    .select('id, company_name, status, last_action_at, next_action_due, action_count, first_touch_at, contact_email, outreach_status, deal_probability, assigned_to, verification_status')
+    .select('id, company_name, status, last_action_at, next_action_due, action_count, first_touch_at, contact_email, outreach_status, deal_probability, assigned_to, verification_status, created_at')
     .in('status', ['new', 'qualified', 'converted']);
 
   // Get all active deals
