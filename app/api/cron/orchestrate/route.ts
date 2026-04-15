@@ -24,6 +24,32 @@ export async function POST(request: Request) {
     const supabase = createServiceClient();
     const now = new Date().toISOString();
 
+    // 0. Auto-pull from PhantomBuster (if configured)
+    let pbPulled = 0;
+    const pbApiKey = process.env.PHANTOMBUSTER_API_KEY;
+    const pbAgentIds = (process.env.PHANTOMBUSTER_AGENT_IDS || '').split(',').filter(Boolean);
+    if (pbApiKey && pbAgentIds.length > 0) {
+      try {
+        // Check if PB has new results since last pull
+        const baseUrl = process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : process.env.NEXT_PUBLIC_SITE_URL || 'https://order-growth-os.vercel.app';
+
+        const pbRes = await fetch(`${baseUrl}/api/phantombuster/pull`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+          },
+          body: JSON.stringify({ agent_id: pbAgentIds[0] }),
+        });
+        const pbData = await pbRes.json();
+        pbPulled = pbData.qualified || 0;
+      } catch {
+        // Non-critical
+      }
+    }
+
     // 1. Reset stuck queue items
     const stuckReset = await resetStuckItems(supabase);
 
@@ -81,6 +107,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       orchestration: {
+        pb_auto_pulled: pbPulled,
         stuck_queue_reset: stuckReset,
         failed_retried: retried,
         outreach_enrolled: outreachEnrolled,
