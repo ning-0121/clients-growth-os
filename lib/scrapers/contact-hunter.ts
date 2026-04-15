@@ -266,6 +266,85 @@ async function googleSearchEmail(companyName: string, domain: string): Promise<s
 }
 
 /**
+ * Method 3b: Search business registries and job sites for contact info
+ * Different countries have different public registries and job boards
+ */
+async function searchRegistriesAndJobs(companyName: string, domain: string): Promise<{
+  emails: string[];
+  phones: string[];
+  contacts: { name: string; title: string }[];
+}> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return { emails: [], phones: [], contacts: [] };
+
+  const emails: string[] = [];
+  const phones: string[] = [];
+  const contacts: { name: string; title: string }[] = [];
+
+  // Search queries targeting registries, job boards, and business directories
+  const queries = [
+    // Business registries & directories (global)
+    `"${companyName}" site:crunchbase.com OR site:bloomberg.com OR site:dnb.com email`,
+    // Job postings (reveal HR/team contacts + company is active)
+    `"${companyName}" hiring OR careers OR jobs email contact`,
+    // Business registry by common countries
+    `"${companyName}" site:companieshouse.gov.uk OR site:opencorporates.com OR site:sec.gov`,
+    // Trade directories
+    `"${companyName}" apparel OR clothing site:thomasnet.com OR site:kompass.com OR site:europages.com`,
+  ];
+
+  // Only run 2 searches to save API quota
+  for (const query of queries.slice(0, 2)) {
+    try {
+      const url = `https://serpapi.com/search.json?api_key=${apiKey}&q=${encodeURIComponent(query)}&num=5&engine=google`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      for (const result of (data.organic_results || [])) {
+        const text = `${result.title || ''} ${result.snippet || ''}`;
+
+        // Extract emails
+        const emailMatches = text.match(EMAIL_RE) || [];
+        for (const email of emailMatches) {
+          if (isValidEmail(email.toLowerCase())) {
+            emails.push(email.toLowerCase());
+          }
+        }
+
+        // Extract phone numbers
+        const phoneMatches = text.match(PHONE_RE) || [];
+        phoneMatches.forEach(p => phones.push(p.trim()));
+
+        // Extract people names + titles from job/team mentions
+        const titlePatterns = [
+          /(?:CEO|Founder|Co-Founder|Owner|Director|Manager|Head of|VP|President|CMO|COO|CTO)\s*[-:]\s*([A-Z][a-z]+ [A-Z][a-z]+)/gi,
+          /([A-Z][a-z]+ [A-Z][a-z]+)\s*[-,]\s*(?:CEO|Founder|Co-Founder|Owner|Director|Manager|Head of|VP|President)/gi,
+        ];
+
+        for (const pattern of titlePatterns) {
+          let match;
+          while ((match = pattern.exec(text)) !== null) {
+            const name = match[1]?.trim();
+            if (name && name.length > 4 && name.length < 40) {
+              const titleMatch = text.match(/(?:CEO|Founder|Co-Founder|Owner|Director|Manager|Head of \w+|VP \w+|President|CMO|COO|CTO)/i);
+              contacts.push({ name, title: titleMatch?.[0] || 'Unknown' });
+            }
+          }
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 300));
+    } catch {}
+  }
+
+  return {
+    emails: [...new Set(emails)],
+    phones: [...new Set(phones)],
+    contacts: contacts.slice(0, 5),
+  };
+}
+
+/**
  * Method 4: MX record verification for guessed emails
  */
 async function verifyEmailDomain(domain: string): Promise<boolean> {
@@ -365,6 +444,39 @@ export async function huntContacts(
       }
     }
     if (googleEmails.length > 0) result.methods_used.push('google_search');
+  }
+
+  // Method 3b: Search business registries & job boards
+  if (result.emails.filter(e => e.confidence >= 60).length < 2) {
+    const registryData = await searchRegistriesAndJobs(companyName, domain);
+    for (const email of registryData.emails) {
+      if (!result.emails.find(e => e.email === email)) {
+        result.emails.push({ email, source: 'registry_jobs', confidence: emailConfidence(email, domain) });
+      }
+    }
+    for (const phone of registryData.phones) {
+      if (!result.phones.find(p => p.phone === phone)) {
+        result.phones.push({ phone, source: 'registry_jobs' });
+      }
+    }
+    // Add discovered contacts (with names and titles from registries/jobs)
+    for (const contact of registryData.contacts) {
+      if (!result.contacts.find(c => c.name === contact.name)) {
+        result.contacts.push(contact);
+        // Also try guessing their email
+        if (domain) {
+          const guesses = guessEmailPatterns(domain, contact.name);
+          for (const guess of guesses.slice(0, 2)) {
+            if (!result.emails.find(e => e.email === guess)) {
+              result.emails.push({ email: guess, source: `guess:${contact.name}`, confidence: 50 });
+            }
+          }
+        }
+      }
+    }
+    if (registryData.emails.length > 0 || registryData.contacts.length > 0) {
+      result.methods_used.push('registry_jobs');
+    }
   }
 
   // Method 5: Common business emails (low confidence, but worth trying)
