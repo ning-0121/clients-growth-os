@@ -58,21 +58,17 @@ export default function AIDiscoveryPanel() {
     setResult(null);
 
     try {
-      const res = await fetch('/api/cron/discover', {
+      const res = await fetch('/api/discover/custom', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${window.location.hostname === 'localhost' ? 'dev' : ''}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keywords: selectedKeywords,
+          markets: selectedMarkets,
+          customer_types: selectedTypes,
+        }),
       });
       const data = await res.json();
       setResult(data);
-
-      // Also fetch queue stats
-      const statsRes = await fetch('/api/queue/stats');
-      if (statsRes.ok) {
-        setQueueStats(await statsRes.json());
-      }
     } catch {
       setResult({ error: '搜索执行失败' });
     } finally {
