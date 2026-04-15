@@ -68,32 +68,6 @@ export default async function LeadsPoolPage() {
           </p>
         </div>
 
-        {/* Metric cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-          <div className="bg-white rounded-lg p-3 border border-gray-200 text-center">
-            <div className="text-xl font-bold text-gray-900">{activeLeads.length}</div>
-            <div className="text-xs text-gray-500">全部客户</div>
-          </div>
-          <div className="bg-white rounded-lg p-3 border border-green-200 text-center">
-            <div className="text-xl font-bold text-green-600">{hotLeads.length}</div>
-            <div className="text-xs text-gray-500">高潜客户</div>
-          </div>
-          <div className="bg-white rounded-lg p-3 border border-red-200 text-center">
-            <div className="text-xl font-bold text-red-600">{riskLeads.length}</div>
-            <div className="text-xs text-gray-500">风险客户</div>
-          </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 text-center">
-            <div className="text-xl font-bold text-gray-500">{coldLeads.length}</div>
-            <div className="text-xs text-gray-500">冷客户池</div>
-          </div>
-          {isAdmin && (
-            <div className="bg-white rounded-lg p-3 border border-purple-200 text-center">
-              <div className="text-xl font-bold text-purple-600">{escalationLeads.length}</div>
-              <div className="text-xs text-gray-500">需升级</div>
-            </div>
-          )}
-        </div>
-
         <LeadsTabSwitcher
           leads={allLeads}
           isAdmin={isAdmin}

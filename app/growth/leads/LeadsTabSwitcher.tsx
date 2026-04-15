@@ -63,13 +63,18 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
 
   const activeLeads = leads.filter((l: any) => l.status !== 'disqualified');
 
-  const tabs: { id: TabId; label: string; show: boolean }[] = [
-    { id: 'all', label: '客户分类列表', show: true },
+  const hotCount = activeLeads.filter((l: any) => (l.deal_probability || 0) >= 61).length;
+  const riskCount = activeLeads.filter((l: any) => l.reactivation_needed).length;
+  const coldCount = activeLeads.filter((l: any) => (l.deal_probability || 0) > 0 && (l.deal_probability || 0) <= 20).length;
+  const bossCount = activeLeads.filter((l: any) => l.escalation_level >= 1 || (l.deal_probability || 0) >= 70).length;
+
+  const tabs: { id: TabId; label: string; count?: number; show: boolean }[] = [
+    { id: 'all', label: '全部客户', count: activeLeads.length, show: true },
     { id: 'ai_discovery', label: 'AI 自动开发', show: true },
     { id: 'phantombuster', label: 'LinkedIn 导入', show: true },
     { id: 'customs', label: '海关数据', show: true },
     { id: 'import', label: '智能导入', show: true },
-    { id: 'boss', label: '老板关注', show: isAdmin },
+    { id: 'boss', label: '老板关注', count: bossCount, show: isAdmin },
   ];
 
   // For customer list: sort by category then probability
@@ -98,6 +103,11 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
             }`}
           >
             {tab.label}
+            {tab.count !== undefined && (
+              <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
+                activeTab === tab.id ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'
+              }`}>{tab.count}</span>
+            )}
           </button>
         ))}
       </div>
@@ -184,6 +194,10 @@ function LeadRow({ lead }: { lead: any }) {
           <span className="text-sm font-medium text-gray-900">{lead.company_name}</span>
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${GRADE_COLORS[lead.grade || 'C']}`}>{lead.grade}</span>
           <span className="text-xs text-gray-400">{SOURCE_LABELS[lead.source] || lead.source}</span>
+          {/* Contact badges */}
+          {lead.contact_email && <span className="text-xs bg-blue-50 text-blue-600 px-1 py-0.5 rounded">邮箱</span>}
+          {lead.contact_linkedin && <span className="text-xs bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded">LI</span>}
+          {lead.instagram_handle && <span className="text-xs bg-pink-50 text-pink-600 px-1 py-0.5 rounded">IG</span>}
           {lead.escalation_level >= 1 && <span className="text-xs bg-purple-100 text-purple-700 px-1 py-0.5 rounded">升级</span>}
           {lead.reactivation_needed && <span className="text-xs bg-red-100 text-red-700 px-1 py-0.5 rounded">需激活</span>}
         </div>
