@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import IntakeTabHub from '../intake/IntakeTabHub';
-import CalendarViewSwitcher from '../calendar/CalendarViewSwitcher';
-import CustomerProfileForm from '../calendar/CustomerProfileForm';
+import AIDiscoveryPanel from './AIDiscoveryPanel';
+import PhantomBusterPanel from './PhantomBusterPanel';
+import CustomsExplorer from './CustomsExplorer';
+import SmartImportPanel from './SmartImportPanel';
 
-type TabId = 'all' | 'hot' | 'risk' | 'cold' | 'intake' | 'calendar' | 'boss';
+type TabId = 'all' | 'ai_discovery' | 'phantombuster' | 'customs' | 'import' | 'boss';
 
 interface Props {
   leads: any[];
@@ -14,6 +15,8 @@ interface Props {
   customers: any[];
   configs: any[];
   tasks: any[];
+  customsCount?: number;
+  matchedCount?: number;
 }
 
 const PROB_COLORS: Record<string, { dot: string; bg: string; text: string }> = {
@@ -39,30 +42,46 @@ const SOURCE_LABELS: Record<string, string> = {
   test_batch: '测试', google: '搜索', apollo: 'Apollo', directory: '目录',
 };
 
-export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, tasks }: Props) {
+// Categorize leads by quality
+function categorize(l: any): 'A' | 'B' | 'C' | 'D' {
+  const prob = l.deal_probability || 0;
+  if (prob >= 61 || (l.grade === 'A' && l.action_count > 0)) return 'A';
+  if (prob >= 41 || (l.grade === 'B+' && l.action_count > 0)) return 'B';
+  if (prob >= 21 || l.first_touch_at) return 'C';
+  return 'D';
+}
+
+const CATEGORY_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
+  A: { label: 'A级', color: 'text-green-700', bgColor: 'bg-green-100' },
+  B: { label: 'B级', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+  C: { label: 'C级', color: 'text-amber-700', bgColor: 'bg-amber-100' },
+  D: { label: 'D级', color: 'text-gray-500', bgColor: 'bg-gray-100' },
+};
+
+export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, tasks, customsCount = 0, matchedCount = 0 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
 
   const activeLeads = leads.filter((l: any) => l.status !== 'disqualified');
 
   const tabs: { id: TabId; label: string; show: boolean }[] = [
-    { id: 'all', label: '全部客户', show: true },
-    { id: 'hot', label: '高潜客户', show: true },
-    { id: 'risk', label: '风险客户', show: true },
-    { id: 'cold', label: '冷客户池', show: true },
+    { id: 'all', label: '客户分类列表', show: true },
+    { id: 'ai_discovery', label: 'AI 自动开发', show: true },
+    { id: 'phantombuster', label: 'LinkedIn 导入', show: true },
+    { id: 'customs', label: '海关数据', show: true },
+    { id: 'import', label: '智能导入', show: true },
     { id: 'boss', label: '老板关注', show: isAdmin },
-    { id: 'intake', label: '录入新客户', show: true },
-    { id: 'calendar', label: '采购日历', show: true },
   ];
 
-  const filtered = (() => {
-    switch (activeTab) {
-      case 'hot': return activeLeads.filter((l: any) => (l.deal_probability || 0) >= 61);
-      case 'risk': return activeLeads.filter((l: any) => l.reactivation_needed || ((l.deal_probability || 0) > 20 && daysSince(l.last_action_at) > 14));
-      case 'cold': return activeLeads.filter((l: any) => (l.deal_probability || 0) > 0 && (l.deal_probability || 0) <= 20);
-      case 'boss': return activeLeads.filter((l: any) => l.escalation_level >= 1 || (l.deal_probability || 0) >= 70);
-      default: return activeLeads;
-    }
-  })();
+  // For customer list: sort by category then probability
+  const categorizedLeads = activeLeads.map((l: any) => ({ ...l, category: categorize(l) }));
+  const sortedLeads = activeTab === 'boss'
+    ? categorizedLeads.filter((l: any) => l.escalation_level >= 1 || (l.deal_probability || 0) >= 70)
+    : categorizedLeads.sort((a: any, b: any) => {
+        const order = { A: 0, B: 1, C: 2, D: 3 };
+        const catDiff = (order[a.category as keyof typeof order] || 3) - (order[b.category as keyof typeof order] || 3);
+        if (catDiff !== 0) return catDiff;
+        return (b.deal_probability || 0) - (a.deal_probability || 0);
+      });
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
@@ -85,38 +104,43 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
 
       {/* Content */}
       <div className="p-4">
-        {activeTab === 'intake' ? (
-          <IntakeTabHub />
-        ) : activeTab === 'calendar' ? (
-          <div>
-            <div className="flex justify-end mb-4">
-              <CustomerProfileForm customers={customers} configs={configs} />
-            </div>
-            <CalendarViewSwitcher
-              tasks={tasks}
-              customers={customers}
-              configs={configs}
-              deals={[]}
-              staffMap={{}}
-              today={new Date().toISOString().split('T')[0]}
-            />
-          </div>
-        ) : (
+        {activeTab === 'ai_discovery' && <AIDiscoveryPanel />}
+
+        {activeTab === 'phantombuster' && <PhantomBusterPanel />}
+
+        {activeTab === 'customs' && <CustomsExplorer customsCount={customsCount} matchedCount={matchedCount} />}
+
+        {activeTab === 'import' && <SmartImportPanel />}
+
+        {(activeTab === 'all' || activeTab === 'boss') && (
           <>
-            {filtered.length === 0 ? (
+            {sortedLeads.length === 0 ? (
               <p className="text-sm text-gray-400 py-8 text-center">
-                {activeTab === 'hot' ? '暂无高潜客户，系统正在持续发现中...' :
-                 activeTab === 'risk' ? '暂无风险客户' :
-                 activeTab === 'cold' ? '暂无冷客户' :
-                 activeTab === 'boss' ? '暂无需要老板关注的客户' :
-                 '暂无客户数据'}
+                {activeTab === 'boss' ? '暂无需要老板关注的客户' : '暂无客户数据，请通过 AI 自动开发或其他方式导入'}
               </p>
             ) : (
-              <div className="space-y-2">
-                {filtered.map((lead: any) => (
-                  <LeadRow key={lead.id} lead={lead} />
-                ))}
-              </div>
+              <>
+                {/* Category summary */}
+                {activeTab === 'all' && (
+                  <div className="flex gap-4 mb-4 text-xs">
+                    {(['A', 'B', 'C', 'D'] as const).map(cat => {
+                      const count = categorizedLeads.filter((l: any) => l.category === cat).length;
+                      const cfg = CATEGORY_CONFIG[cat];
+                      return (
+                        <span key={cat} className={`px-2 py-1 rounded ${cfg.bgColor} ${cfg.color} font-medium`}>
+                          {cfg.label} {count}个
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {sortedLeads.map((lead: any) => (
+                    <LeadRow key={lead.id} lead={lead} />
+                  ))}
+                </div>
+              </>
             )}
           </>
         )}
@@ -125,33 +149,31 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
   );
 }
 
-function daysSince(dateStr: string | null): number {
-  if (!dateStr) return 999;
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
-}
-
 function LeadRow({ lead }: { lead: any }) {
   const prob = lead.deal_probability || 0;
   const stage = lead.probability_stage || 'cold';
   const pc = PROB_COLORS[stage] || PROB_COLORS.cold;
-  const days = daysSince(lead.last_action_at);
+  const cat = CATEGORY_CONFIG[lead.category] || CATEGORY_CONFIG.D;
+  const days = lead.last_action_at
+    ? Math.floor((Date.now() - new Date(lead.last_action_at).getTime()) / 86400000)
+    : null;
 
   return (
     <div className={`border rounded-lg p-3 flex items-center gap-3 ${
       lead.escalation_level >= 2 ? 'border-purple-200 bg-purple-50/30' :
       lead.reactivation_needed ? 'border-red-200 bg-red-50/30' :
-      prob >= 61 ? 'border-green-200' : 'border-gray-100'
+      lead.category === 'A' ? 'border-green-200' : 'border-gray-100'
     }`}>
-      {/* Probability */}
-      <div className="w-14 text-center flex-shrink-0">
-        <div className="text-lg font-bold text-gray-900">{prob}%</div>
-        <div className={`text-xs px-1 py-0.5 rounded ${pc.bg} ${pc.text}`}>{STAGE_LABELS[stage]}</div>
-      </div>
+      {/* Category */}
+      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cat.bgColor} ${cat.color} flex-shrink-0`}>
+        {cat.label}
+      </span>
 
-      {/* Progress bar */}
-      <div className="w-16 flex-shrink-0">
-        <div className="w-full bg-gray-100 rounded-full h-1.5">
-          <div className={`h-1.5 rounded-full ${pc.dot}`} style={{ width: `${prob}%` }} />
+      {/* Probability */}
+      <div className="w-12 text-center flex-shrink-0">
+        <div className="text-sm font-bold text-gray-900">{prob}%</div>
+        <div className="w-full bg-gray-100 rounded-full h-1 mt-0.5">
+          <div className={`h-1 rounded-full ${pc.dot}`} style={{ width: `${prob}%` }} />
         </div>
       </div>
 
@@ -163,8 +185,7 @@ function LeadRow({ lead }: { lead: any }) {
           </Link>
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${GRADE_COLORS[lead.grade || 'C']}`}>{lead.grade}</span>
           <span className="text-xs text-gray-400">{SOURCE_LABELS[lead.source] || lead.source}</span>
-          {lead.escalation_level >= 2 && <span className="text-xs bg-purple-100 text-purple-700 px-1 py-0.5 rounded">老板</span>}
-          {lead.escalation_level === 1 && <span className="text-xs bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded">高级</span>}
+          {lead.escalation_level >= 1 && <span className="text-xs bg-purple-100 text-purple-700 px-1 py-0.5 rounded">升级</span>}
           {lead.reactivation_needed && <span className="text-xs bg-red-100 text-red-700 px-1 py-0.5 rounded">需激活</span>}
         </div>
         {lead.next_recommended_action && (
@@ -174,11 +195,11 @@ function LeadRow({ lead }: { lead: any }) {
         )}
       </div>
 
-      {/* Right info */}
+      {/* Right */}
       <div className="text-right text-xs text-gray-400 flex-shrink-0">
         {lead.assigned_name && <div>{lead.assigned_name}</div>}
-        <div className={days > 14 ? 'text-red-500 font-medium' : ''}>
-          {days === 0 ? '今天' : days < 999 ? `${days}天前` : '—'}
+        <div className={days !== null && days > 14 ? 'text-red-500 font-medium' : ''}>
+          {days === 0 ? '今天' : days !== null && days < 999 ? `${days}天前` : '—'}
         </div>
       </div>
     </div>

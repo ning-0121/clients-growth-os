@@ -41,6 +41,10 @@ export default async function LeadsPoolPage() {
   const { data: seasonalConfigs } = await supabase.from('customer_seasonal_configs').select('*').eq('is_active', true);
   const { data: seasonalTasks } = await supabase.from('seasonal_tasks').select('*').is('completed_at', null).order('due_date');
 
+  // Customs stats
+  const { count: customsCount } = await supabase.from('growth_customs_records').select('id', { count: 'exact', head: true });
+  const { count: matchedCount } = await supabase.from('growth_customs_matches').select('id', { count: 'exact', head: true });
+
   const allLeads = (leads || []).map((l: any) => ({
     ...l,
     assigned_name: l.assigned_to ? staffMap[l.assigned_to] : null,
@@ -96,6 +100,8 @@ export default async function LeadsPoolPage() {
           customers={customers || []}
           configs={seasonalConfigs || []}
           tasks={seasonalTasks || []}
+          customsCount={customsCount || 0}
+          matchedCount={matchedCount || 0}
         />
       </main>
     </div>
