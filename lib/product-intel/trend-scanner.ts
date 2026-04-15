@@ -349,14 +349,45 @@ export async function runFullProductScan(
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return { trends_scanned: 0, opportunities_found: 0, top_recommendations: [] };
 
-  // Run all 5 channels in parallel
-  const [crowdfund, tiktok, gaps, fabrics, funded] = await Promise.allSettled([
-    discoverCrowdfundBrands(apiKey),
-    discoverTikTokGaps(apiKey),
-    detectSupplyGaps(apiKey),
-    detectFabricTrends(apiKey),
-    discoverFundedBrands(apiKey, supabase),
-  ]);
+  // Run 2 channels per day (rotate) to stay within 60s timeout
+  // Day 1: crowdfund + tiktok
+  // Day 2: gaps + fabrics
+  // Day 3: funded + crowdfund
+  // ...rotates
+  const dayOfWeek = new Date().getDay();
+  const channelPairs = [
+    [0, 1], // Sun: crowdfund + tiktok
+    [2, 3], // Mon: gaps + fabrics
+    [4, 0], // Tue: funded + crowdfund
+    [1, 2], // Wed: tiktok + gaps
+    [3, 4], // Thu: fabrics + funded
+    [0, 2], // Fri: crowdfund + gaps
+    [1, 3], // Sat: tiktok + fabrics
+  ];
+  const todayChannels = channelPairs[dayOfWeek];
+
+  const channelFns = [
+    () => discoverCrowdfundBrands(apiKey),
+    () => discoverTikTokGaps(apiKey),
+    () => detectSupplyGaps(apiKey),
+    () => detectFabricTrends(apiKey),
+    () => discoverFundedBrands(apiKey, supabase),
+  ];
+
+  const results = await Promise.allSettled(
+    todayChannels.map(idx => channelFns[idx]())
+  );
+
+  // Map results back
+  const channelNames = ['crowdfund', 'tiktok', 'gaps', 'fabrics', 'funded'];
+  const emptyArrays = [[], [], [], [], 0];
+
+  const channelResults: any[] = [[], [], [], [], 0];
+  todayChannels.forEach((chIdx, i) => {
+    channelResults[chIdx] = results[i].status === 'fulfilled' ? results[i].value : emptyArrays[chIdx];
+  });
+
+  const [crowdfund, tiktok, gaps, fabrics, funded] = channelResults as [CrowdfundBrand[], TikTokOpportunity[], SupplyGap[], FabricTrend[], number];
 
   const report: Omit<ProductIntelReport, 'ai_recommendations'> = {
     crowdfund_brands: crowdfund.status === 'fulfilled' ? crowdfund.value : [],
