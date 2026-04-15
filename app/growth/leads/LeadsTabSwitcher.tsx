@@ -2,14 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import AIDiscoveryPanel from './AIDiscoveryPanel';
 import PhantomBusterPanel from './PhantomBusterPanel';
 import CustomsExplorer from './CustomsExplorer';
 import SmartImportPanel from './SmartImportPanel';
-
-// AG Grid needs to be loaded client-side only (no SSR)
-const CustomerGrid = dynamic(() => import('./CustomerGrid'), { ssr: false });
 
 type TabId = 'all' | 'ai_discovery' | 'phantombuster' | 'customs' | 'import' | 'boss';
 
@@ -64,6 +60,7 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; bgColor: s
 
 export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, tasks, customsCount = 0, matchedCount = 0 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const activeLeads = leads.filter((l: any) => l.status !== 'disqualified');
 
@@ -91,6 +88,11 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
         if (catDiff !== 0) return catDiff;
         return (b.deal_probability || 0) - (a.deal_probability || 0);
       });
+
+  // Apply search filter
+  const filteredLeads = searchQuery
+    ? sortedLeads.filter((l: any) => l.company_name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : sortedLeads;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
@@ -127,7 +129,95 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
         {activeTab === 'import' && <SmartImportPanel />}
 
         {(activeTab === 'all' || activeTab === 'boss') && (
-          <CustomerGrid leads={activeTab === 'boss' ? sortedLeads : leads} isAdmin={isAdmin} />
+          <>
+            {/* Search box */}
+            <div className="mb-3">
+              <input
+                type="text"
+                placeholder="搜索公司名称..."
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Category summary */}
+            <div className="flex gap-3 mb-3 text-xs flex-wrap">
+              {(['A', 'B', 'C', 'D'] as const).map(cat => {
+                const count = categorizedLeads.filter((l: any) => l.category === cat).length;
+                const cfg = CATEGORY_CONFIG[cat];
+                return (
+                  <span key={cat} className={`px-2 py-1 rounded ${cfg.bgColor} ${cfg.color} font-medium`}>
+                    {cfg.label} {count}个
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">级别</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">概率</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">公司名称</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">等级</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">来源</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">联系方式</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">推荐动作</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">负责人</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">互动</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredLeads.map((lead: any) => {
+                    const cat = CATEGORY_CONFIG[lead.category] || CATEGORY_CONFIG.D;
+                    const prob = lead.deal_probability || 0;
+                    const pc = PROB_COLORS[lead.probability_stage || 'cold'] || PROB_COLORS.cold;
+                    const days = lead.last_action_at ? Math.floor((Date.now() - new Date(lead.last_action_at).getTime()) / 86400000) : null;
+
+                    return (
+                      <tr key={lead.id} className="hover:bg-indigo-50 cursor-pointer" onClick={() => window.location.href = `/growth/leads/${lead.id}`}>
+                        <td className="px-3 py-2">
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cat.bgColor} ${cat.color}`}>{cat.label}</span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <span className={`text-sm font-bold`} style={{color: prob >= 61 ? '#16a34a' : prob >= 41 ? '#2563eb' : prob >= 21 ? '#ca8a04' : '#9ca3af'}}>{prob}%</span>
+                            <div className="w-12 bg-gray-100 rounded-full h-1"><div className={`h-1 rounded-full ${pc.dot}`} style={{width:`${prob}%`}} /></div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-sm font-medium text-gray-900">{lead.company_name}</td>
+                        <td className="px-3 py-2"><span className={`text-xs px-1.5 py-0.5 rounded-full ${GRADE_COLORS[lead.grade || 'C']}`}>{lead.grade}</span></td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{SOURCE_LABELS[lead.source] || lead.source}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-1">
+                            {lead.contact_email && <span className="text-xs bg-blue-50 text-blue-600 px-1 py-0.5 rounded">邮箱</span>}
+                            {lead.contact_linkedin && <span className="text-xs bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded">LI</span>}
+                            {lead.instagram_handle && <span className="text-xs bg-pink-50 text-pink-600 px-1 py-0.5 rounded">IG</span>}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          {lead.next_recommended_action && (
+                            <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{lead.next_recommended_action}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{lead.assigned_name || '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <span className={days !== null && days > 14 ? 'text-red-500 font-medium' : 'text-gray-400'}>
+                            {days === 0 ? '今天' : days !== null ? `${days}天前` : '—'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filteredLeads.length === 0 && (
+              <p className="text-sm text-gray-400 py-8 text-center">没有匹配的客户</p>
+            )}
+          </>
         )}
       </div>
     </div>
