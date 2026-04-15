@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { dequeueItems, markCompleted, markFailed } from '@/lib/scrapers/source-queue';
-import { enrichBatch, EnrichmentResult } from '@/lib/growth/website-enricher';
+import { enrichBatch } from '@/lib/growth/website-enricher';
+import { huntContacts } from '@/lib/scrapers/contact-hunter';
 import { runIntakePipeline } from '@/lib/growth/intake-pipeline';
 import { RawLeadInput, LeadSource } from '@/lib/types';
 
@@ -91,6 +92,37 @@ export async function POST(request: Request) {
           continue;
         }
 
+        // Deep contact hunting — if basic enrichment didn't find email, dig deeper
+        let contactEmail = result.contact_email;
+        let contactLinkedin = result.contact_linkedin;
+        let igHandle = result.instagram_handle;
+
+        if (!contactEmail) {
+          try {
+            const hunted = await huntContacts(cleanedUrl, result.company_name);
+            // Take the highest confidence email
+            const bestEmail = hunted.emails.find(e => e.confidence >= 50);
+            if (bestEmail) contactEmail = bestEmail.email;
+
+            // Get LinkedIn if not found by enricher
+            if (!contactLinkedin) {
+              const li = hunted.social.find(s => s.platform === 'linkedin');
+              if (li) contactLinkedin = li.url;
+            }
+
+            // Get IG if not found
+            if (!igHandle) {
+              const ig = hunted.social.find(s => s.platform === 'instagram');
+              if (ig) {
+                const match = ig.url.match(/instagram\.com\/([a-zA-Z0-9_.]+)/);
+                if (match) igHandle = match[1];
+              }
+            }
+          } catch {
+            // Non-critical — continue with what enricher found
+          }
+        }
+
         // Convert to RawLeadInput
         const source: LeadSource = (VALID_LEAD_SOURCES.includes(item.source as LeadSource))
           ? item.source as LeadSource
@@ -100,9 +132,9 @@ export async function POST(request: Request) {
           company_name: result.company_name,
           source,
           website: cleanTargetUrl(result.website),
-          contact_email: result.contact_email || undefined,
-          instagram_handle: result.instagram_handle || undefined,
-          contact_linkedin: result.contact_linkedin || undefined,
+          contact_email: contactEmail || undefined,
+          instagram_handle: igHandle || undefined,
+          contact_linkedin: contactLinkedin || undefined,
           product_match: result.product_match || undefined,
           ai_analysis: result.ai_analysis || undefined,
         };
