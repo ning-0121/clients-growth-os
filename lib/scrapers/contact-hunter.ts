@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { extractDomain } from '@/lib/growth/lead-engine';
+import { searchTomba, googleEmailHunt, generateEmailPermutations, extractInstagramEmail, enrichCompanyInfo, scrapeShopifyStore } from './external-tools';
 
 /**
  * Multi-Layer Contact Hunter
@@ -765,12 +766,107 @@ export async function huntContacts(
     }
   }
 
-  // Method 5: Common business emails (low confidence, but worth trying)
+  // ═══ EXTERNAL TOOLS (learned from GitHub) ═══
+
+  // Tool 1: Tomba.io — professional email finder (50/month free)
+  if (result.emails.filter(e => e.confidence >= 70).length === 0) {
+    try {
+      const tomba = await searchTomba(domain);
+      if (tomba && tomba.emails.length > 0) {
+        for (const te of tomba.emails) {
+          if (!result.emails.find(e => e.email === te.email)) {
+            result.emails.push({
+              email: te.email,
+              source: `tomba:${te.type}`,
+              confidence: te.type === 'personal' ? 85 : 65,
+            });
+          }
+        }
+        if (tomba.country && !result.addresses.find(a => a.source === 'tomba')) {
+          result.addresses.push({ address: tomba.country, source: 'tomba' });
+        }
+        result.methods_used.push('tomba.io');
+      }
+    } catch {}
+  }
+
+  // Tool 2: Enhanced Google Email Hunt (MailHunter technique)
+  if (result.emails.filter(e => e.confidence >= 70).length === 0) {
+    try {
+      const huntedEmails = await googleEmailHunt(companyName, domain);
+      for (const email of huntedEmails) {
+        if (!result.emails.find(e => e.email === email)) {
+          result.emails.push({ email, source: 'google_email_hunt', confidence: emailConfidence(email, domain) });
+        }
+      }
+      if (huntedEmails.length > 0) result.methods_used.push('google_email_hunt');
+    } catch {}
+  }
+
+  // Tool 3: Email Permutation (from contact names found)
+  if (result.emails.filter(e => e.confidence >= 70).length === 0 && result.contacts.length > 0) {
+    const hasMx = await verifyEmailDomain(domain);
+    if (hasMx) {
+      for (const contact of result.contacts.slice(0, 2)) {
+        const parts = contact.name.split(/\s+/);
+        if (parts.length >= 2) {
+          const perms = generateEmailPermutations(parts[0], parts[parts.length - 1], domain);
+          for (const email of perms.slice(0, 3)) { // Top 3 most common patterns
+            if (!result.emails.find(e => e.email === email)) {
+              result.emails.push({ email, source: `permutation:${contact.name}`, confidence: 50 });
+            }
+          }
+        }
+      }
+      result.methods_used.push('email_permutation');
+    }
+  }
+
+  // Tool 4: Instagram bio email (if handle available)
   if (result.emails.filter(e => e.confidence >= 60).length === 0) {
+    // Check if we have IG from earlier scan
+    const igLink = result.social.find(s => s.platform === 'instagram');
+    const igHandle = igLink?.url?.match(/instagram\.com\/([a-zA-Z0-9_.]+)/)?.[1];
+    if (igHandle) {
+      try {
+        const igData = await extractInstagramEmail(igHandle);
+        if (igData.email && !result.emails.find(e => e.email === igData.email)) {
+          result.emails.push({ email: igData.email, source: 'instagram_bio', confidence: 70 });
+          result.methods_used.push('instagram_bio');
+        }
+      } catch {}
+    }
+  }
+
+  // Tool 5: Shopify store data (products + hidden email)
+  try {
+    const shopify = await scrapeShopifyStore(website);
+    if (shopify?.isShopify) {
+      if (shopify.email && !result.emails.find(e => e.email === shopify.email)) {
+        result.emails.push({ email: shopify.email, source: 'shopify_privacy', confidence: 75 });
+      }
+      result.methods_used.push('shopify_api');
+    }
+  } catch {}
+
+  // Tool 6: Company enrichment (founded/employees/location)
+  try {
+    const enrichment = await enrichCompanyInfo(companyName);
+    if (enrichment.location && !result.addresses.find(a => a.source === 'company_enrichment')) {
+      result.addresses.push({ address: enrichment.location, source: 'company_enrichment' });
+    }
+    // Store enrichment data in a special check
+    if (enrichment.founded || enrichment.employees || enrichment.revenue) {
+      result.methods_used.push('company_enrichment');
+    }
+  } catch {}
+
+  // Method 5: Common business emails (last resort)
+  if (result.emails.filter(e => e.confidence >= 50).length === 0) {
     const hasMx = await verifyEmailDomain(domain);
     if (hasMx) {
       const commons = commonBusinessEmails(domain);
-      for (const email of commons.slice(0, 3)) { // Only top 3
+      for (const email of commons.slice(0, 3)) {
         if (!result.emails.find(e => e.email === email)) {
           result.emails.push({ email, source: 'common_pattern', confidence: 35 });
         }
