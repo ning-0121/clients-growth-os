@@ -6,6 +6,7 @@ import GrowthNavbar from '@/components/GrowthNavbar';
 import { GrowthLead } from '@/lib/types';
 import LeadActionPanel from '../my-today/LeadActionPanel';
 import { calculateAIDailyProgress } from '@/lib/config/daily-targets';
+import { scanAllRisks, RiskAlert } from '@/lib/growth/risk-monitor';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,6 +67,9 @@ export default async function WorkspacePage() {
 
   // AI KPI progress
   const kpi = await calculateAIDailyProgress(supabase);
+
+  // Risk alerts
+  const riskAlerts = await scanAllRisks(supabase);
 
   // Bucketing
   const buckets = {
@@ -174,6 +178,39 @@ export default async function WorkspacePage() {
             ))}
           </div>
         </div>
+
+        {/* Risk Alerts */}
+        {riskAlerts.length > 0 && (
+          <div className="bg-white border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-red-800">
+                风险提示 <span className="text-xs font-normal text-red-600 ml-1">{riskAlerts.length} 个需要关注</span>
+              </h2>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {riskAlerts.slice(0, 10).map((alert, i) => (
+                <div key={i} className={`flex items-start gap-3 rounded p-2 text-xs ${
+                  alert.severity === 'critical' ? 'bg-red-50 border border-red-200' :
+                  alert.severity === 'high' ? 'bg-orange-50 border border-orange-200' :
+                  'bg-yellow-50 border border-yellow-200'
+                }`}>
+                  <span className={`flex-shrink-0 px-1.5 py-0.5 rounded font-bold ${
+                    alert.severity === 'critical' ? 'bg-red-200 text-red-800' :
+                    alert.severity === 'high' ? 'bg-orange-200 text-orange-800' :
+                    'bg-yellow-200 text-yellow-800'
+                  }`}>
+                    {alert.severity === 'critical' ? '紧急' : alert.severity === 'high' ? '重要' : '注意'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900">{alert.title}</div>
+                    <div className="text-gray-500 mt-0.5">{alert.detail}</div>
+                    <div className="text-indigo-600 mt-0.5 font-medium">→ {alert.suggested_action}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* My tasks */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
