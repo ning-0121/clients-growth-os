@@ -5,6 +5,7 @@ import { discoverFromBing } from '@/lib/scrapers/duckduckgo-discovery';
 import { discoverFromSocialAndEcom } from '@/lib/scrapers/social-ecom-discovery';
 import { learnFromWonDeals, expandSearchScope } from '@/lib/scrapers/search-intelligence';
 import { planDailyMission, getRecentlyUsedQueries, deduplicateQueries, getLeadsForReEnrichment } from '@/lib/scrapers/daily-mission-planner';
+import { getLearnedSearchQueries } from '@/lib/scrapers/auto-upgrade';
 import { huntContacts } from '@/lib/scrapers/contact-hunter';
 import { enqueueUrls } from '@/lib/scrapers/source-queue';
 import { extractDomain } from '@/lib/growth/lead-engine';
