@@ -79,6 +79,8 @@ export default async function LeadDetailPage({
   const st = STATUS_LABELS[d.status] || STATUS_LABELS.new;
   const gc = GRADE_COLORS[d.grade || 'C'];
   const isActive = d.status === 'new' || d.status === 'qualified';
+  const ai = (d as any).ai_analysis as Record<string, any> | null;
+  const customs = (d as any).customs_summary as Record<string, any> | null;
 
   // Recommended action
   let recLabel = '—';
@@ -140,30 +142,79 @@ export default async function LeadDetailPage({
           </div>
         </div>
 
-        {/* Info grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-          {/* Source & assignment */}
+        {/* Info grid — 3 columns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          {/* Company profile */}
           <div className="bg-white rounded-lg border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">来源与分配</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">公司信息</h3>
             <dl className="space-y-2 text-sm">
+              <Row label="公司类型" value={ai?.company_type === 'brand' ? '品牌商' : ai?.company_type === 'retailer' ? '零售商' : ai?.company_type === 'manufacturer' ? '制造商' : ai?.company_type === 'wholesaler' ? '批发商' : ai?.company_type || '—'} />
+              <Row label="公司规模" value={ai?.scale_estimate === 'large' ? '大型' : ai?.scale_estimate === 'medium' ? '中型' : ai?.scale_estimate === 'small' ? '小型/初创' : '—'} />
+              <Row label="产品匹配度" value={ai?.product_fit_score ? `${ai.product_fit_score}%` : '—'} />
+              <Row label="产品品类" value={ai?.product_categories?.join(', ') || d.product_match || '—'} />
               <Row label="来源" value={d.source || '—'} />
-              <Row label="分配给" value={assigneeName} />
-              <Row label="分配时间" value={d.assigned_at ? new Date(d.assigned_at).toLocaleString('zh-CN') : '—'} />
+              <Row label="网站" value={d.website || '—'} />
               <Row label="创建时间" value={new Date(d.created_at).toLocaleString('zh-CN')} />
             </dl>
           </div>
 
-          {/* Contact paths */}
+          {/* Contact info */}
           <div className="bg-white rounded-lg border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">联系路径</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">联系方式</h3>
             <dl className="space-y-2 text-sm">
+              <Row label="联系人" value={d.contact_name || '—'} />
               <Row label="邮箱" value={d.contact_email || '—'} />
               <Row label="LinkedIn" value={d.contact_linkedin || '—'} />
-              <Row label="Instagram" value={d.instagram_handle || '—'} />
-              <Row label="网站" value={d.website || '—'} />
+              <Row label="Instagram" value={d.instagram_handle ? `@${d.instagram_handle}` : '—'} />
+            </dl>
+            {!d.contact_email && !d.contact_linkedin && (
+              <p className="text-xs text-red-500 mt-2 bg-red-50 p-2 rounded">缺少联系方式，系统会在 re-enrichment 中持续补充</p>
+            )}
+          </div>
+
+          {/* Assignment & status */}
+          <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">分配与状态</h3>
+            <dl className="space-y-2 text-sm">
+              <Row label="分配给" value={assigneeName} />
+              <Row label="成交概率" value={`${(d as any).deal_probability || 0}%`} />
+              <Row label="验证状态" value={(d as any).verification_status || '—'} />
+              <Row label="AI推荐" value={(d as any).ai_recommendation === 'pursue' ? '推荐开发' : (d as any).ai_recommendation === 'skip' ? '跳过' : (d as any).ai_recommendation === 'investigate' ? '需调查' : '—'} />
+              <Row label="开发信" value={(d as any).outreach_status === 'sequence_active' ? '发送中' : (d as any).outreach_status === 'replied' ? '已回复' : (d as any).outreach_status === 'enrolled' ? '已入队' : '未开始'} />
+              <Row label="推荐动作" value={(d as any).next_recommended_action || '—'} />
             </dl>
           </div>
         </div>
+
+        {/* AI analysis detail */}
+        {ai && (
+          <div className="bg-blue-50 rounded-lg border border-blue-200 p-5 mb-6">
+            <h3 className="text-sm font-semibold text-blue-800 mb-2">AI 分析结果</h3>
+            {ai.key_evidence && ai.key_evidence.length > 0 && (
+              <div className="text-xs text-blue-700 space-y-1">
+                {ai.key_evidence.map((e: string, i: number) => (
+                  <p key={i}>• {e}</p>
+                ))}
+              </div>
+            )}
+            {ai.outreach_recommendation && (
+              <p className="text-xs text-blue-600 mt-2 font-medium">AI 开发建议：{ai.outreach_recommendation}</p>
+            )}
+          </div>
+        )}
+
+        {/* Customs data if available */}
+        {customs && customs.total_records > 0 && (
+          <div className="bg-amber-50 rounded-lg border border-amber-200 p-5 mb-6">
+            <h3 className="text-sm font-semibold text-amber-800 mb-2">海关数据</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-amber-700">
+              <div><span className="font-medium">进口记录:</span> {customs.total_records}条</div>
+              <div><span className="font-medium">总金额:</span> ${customs.total_value_usd?.toLocaleString()}</div>
+              <div><span className="font-medium">服装进口商:</span> {customs.is_apparel_importer ? '是' : '否'}</div>
+              <div><span className="font-medium">来源国:</span> {customs.origin_countries?.join(', ') || '—'}</div>
+            </div>
+          </div>
+        )}
 
         {/* Execution state */}
         <div className="bg-white rounded-lg border border-gray-200 p-5 mb-6">
