@@ -21,7 +21,7 @@ export default async function LeadsPoolPage() {
   // All leads (for admin: all, for sales: only assigned)
   const query = supabase
     .from('growth_leads')
-    .select('id, company_name, contact_name, contact_email, website, source, grade, final_score, status, deal_probability, probability_stage, next_recommended_action, next_action_reason, escalation_level, reactivation_needed, assigned_to, outreach_status, ai_analysis, created_at, last_action_at')
+    .select('id, company_name, contact_name, contact_email, contact_phone, contact_address, contact_people, contact_linkedin, instagram_handle, website, source, grade, final_score, status, deal_probability, probability_stage, next_recommended_action, next_action_reason, escalation_level, reactivation_needed, assigned_to, outreach_status, ai_analysis, product_match, created_at, last_action_at')
     .in('status', ['new', 'qualified', 'converted', 'disqualified'])
     .order('deal_probability', { ascending: false });
 

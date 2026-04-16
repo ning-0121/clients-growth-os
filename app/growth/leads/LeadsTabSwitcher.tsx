@@ -200,14 +200,13 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">级别</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">概率</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">公司名称</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">等级</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">联系人</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">邮箱</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">电话</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">主营品类</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">来源</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">联系方式</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">推荐动作</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">负责人</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">互动</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -223,31 +222,24 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
                           <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cat.bgColor} ${cat.color}`}>{cat.label}</span>
                         </td>
                         <td className="px-3 py-2">
-                          <div className="flex items-center gap-1">
-                            <span className={`text-sm font-bold`} style={{color: prob >= 61 ? '#16a34a' : prob >= 41 ? '#2563eb' : prob >= 21 ? '#ca8a04' : '#9ca3af'}}>{prob}%</span>
-                            <div className="w-12 bg-gray-100 rounded-full h-1"><div className={`h-1 rounded-full ${pc.dot}`} style={{width:`${prob}%`}} /></div>
-                          </div>
+                          <div className="text-sm font-medium text-gray-900">{lead.company_name}</div>
+                          <div className="text-xs text-gray-400">{lead.ai_analysis?.company_type || ''} {lead.ai_analysis?.scale_estimate || ''}</div>
                         </td>
-                        <td className="px-3 py-2 text-sm font-medium text-gray-900">{lead.company_name}</td>
-                        <td className="px-3 py-2"><span className={`text-xs px-1.5 py-0.5 rounded-full ${GRADE_COLORS[lead.grade || 'C']}`}>{lead.grade}</span></td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{lead.contact_name || <span className="text-gray-300">待查</span>}</td>
+                        <td className="px-3 py-2 text-xs">
+                          {lead.contact_email ? (
+                            <span className={(() => { const l = (lead.contact_email||'').split('@')[0]?.toLowerCase(); return ['info','sales','hello','contact','support','help','customerservice','care'].includes(l) ? 'text-amber-600' : 'text-blue-600'; })()}>
+                              {lead.contact_email}
+                            </span>
+                          ) : <span className="text-gray-300">待查</span>}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{lead.contact_phone || <span className="text-gray-300">待查</span>}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{lead.ai_analysis?.product_categories?.slice(0,2).join(', ') || lead.product_match?.slice(0,20) || '—'}</td>
                         <td className="px-3 py-2 text-xs text-gray-500">{SOURCE_LABELS[lead.source] || lead.source}</td>
-                        <td className="px-3 py-2">
-                          <div className="flex gap-1">
-                            {lead.contact_email && <span className="text-xs bg-blue-50 text-blue-600 px-1 py-0.5 rounded">邮箱</span>}
-                            {lead.contact_linkedin && <span className="text-xs bg-indigo-50 text-indigo-600 px-1 py-0.5 rounded">LI</span>}
-                            {lead.instagram_handle && <span className="text-xs bg-pink-50 text-pink-600 px-1 py-0.5 rounded">IG</span>}
-                          </div>
-                        </td>
                         <td className="px-3 py-2">
                           {lead.next_recommended_action && (
                             <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{lead.next_recommended_action}</span>
                           )}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-gray-500">{lead.assigned_name || '—'}</td>
-                        <td className="px-3 py-2 text-xs">
-                          <span className={days !== null && days > 14 ? 'text-red-500 font-medium' : 'text-gray-400'}>
-                            {days === 0 ? '今天' : days !== null ? `${days}天前` : '—'}
-                          </span>
                         </td>
                       </tr>
                     );
