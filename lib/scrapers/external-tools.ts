@@ -111,6 +111,64 @@ export async function searchTomba(domain: string): Promise<TombaResult | null> {
 }
 
 // ══════════════════════════════════════
+// Tomba Email Verifier — validate a specific email before sending
+// Reduces bounce rate from ~15% (unverified) to <2% (verified)
+// https://tomba.io/email-verifier/
+// ══════════════════════════════════════
+
+export interface TombaVerifyResult {
+  email: string;
+  deliverable: boolean;      // True if server accepts the email
+  disposable: boolean;       // True for throwaway emails (mailinator etc.)
+  webmail: boolean;          // True for gmail/yahoo/outlook
+  mx_records: boolean;       // True if domain has MX records
+  smtp_valid: boolean;       // True if SMTP handshake succeeded
+  score: number;             // 0-100 overall confidence
+  status: 'valid' | 'invalid' | 'risky' | 'unknown';
+}
+
+export async function verifyEmailTomba(email: string): Promise<TombaVerifyResult | null> {
+  const apiKey = process.env.TOMBA_API_KEY;
+  const apiSecret = process.env.TOMBA_SECRET;
+  if (!apiKey || !apiSecret) return null;
+  if (!email || !email.includes('@')) return null;
+
+  try {
+    const res = await fetch(`https://api.tomba.io/v1/email-verifier/${encodeURIComponent(email)}`, {
+      headers: { 'X-Tomba-Key': apiKey, 'X-Tomba-Secret': apiSecret },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const d = data.data || {};
+
+    // Derive overall status from signals
+    const deliverable = !!d.deliverable;
+    const disposable = !!d.disposable;
+    const mxRecords = !!d.mx_records;
+    const smtpValid = !!d.smtp_server;
+    let status: 'valid' | 'invalid' | 'risky' | 'unknown' = 'unknown';
+    if (disposable || !mxRecords) status = 'invalid';
+    else if (deliverable && smtpValid) status = 'valid';
+    else if (deliverable || smtpValid) status = 'risky';
+    else status = 'invalid';
+
+    return {
+      email,
+      deliverable,
+      disposable,
+      webmail: !!d.webmail,
+      mx_records: mxRecords,
+      smtp_valid: smtpValid,
+      score: d.score || 0,
+      status,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ══════════════════════════════════════
 // Tool 3: Enhanced Google Email Hunter
 // 来源: chirag127/MailHunter technique
 // ══════════════════════════════════════

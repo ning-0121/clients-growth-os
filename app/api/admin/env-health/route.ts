@@ -1,0 +1,187 @@
+import { NextResponse } from 'next/server';
+import { requireAuth, getCurrentProfile } from '@/lib/auth';
+
+/**
+ * GET /api/admin/env-health
+ *
+ * Admin-only endpoint: returns which environment variables are configured.
+ * Shows capability status (what works, what's missing).
+ * Never returns the actual secret values — only booleans.
+ */
+
+interface EnvCheck {
+  key: string;
+  required: boolean;
+  configured: boolean;
+  capability: string;
+  impact: string;
+  setup_url?: string;
+}
+
+export async function GET() {
+  await requireAuth();
+  const profile = await getCurrentProfile();
+  if (profile?.role !== '管理员') {
+    return NextResponse.json({ error: '仅管理员' }, { status: 403 });
+  }
+
+  const checks: EnvCheck[] = [
+    // ── Critical (must have) ──
+    {
+      key: 'NEXT_PUBLIC_SUPABASE_URL',
+      required: true,
+      configured: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      capability: 'Supabase 数据库连接',
+      impact: '整个系统无法运行',
+    },
+    {
+      key: 'SUPABASE_SERVICE_ROLE_KEY',
+      required: true,
+      configured: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      capability: 'Cron 和后台任务',
+      impact: 'AI 发现 / 审批发送 / 监工全部失败',
+    },
+    {
+      key: 'ANTHROPIC_API_KEY',
+      required: true,
+      configured: !!process.env.ANTHROPIC_API_KEY,
+      capability: 'AI 分析和邮件生成',
+      impact: '客户分析、策略生成、开发信全失效',
+    },
+    {
+      key: 'CRON_SECRET',
+      required: true,
+      configured: !!process.env.CRON_SECRET,
+      capability: 'Cron 认证',
+      impact: '定时任务无保护',
+    },
+
+    // ── Email ──
+    {
+      key: 'RESEND_API_KEY',
+      required: true,
+      configured: !!process.env.RESEND_API_KEY,
+      capability: '邮件发送',
+      impact: '无法发送任何开发信',
+      setup_url: 'https://resend.com/api-keys',
+    },
+    {
+      key: 'RESEND_WEBHOOK_SECRET',
+      required: false,
+      configured: !!process.env.RESEND_WEBHOOK_SECRET,
+      capability: '邮件打开/点击/退信追踪',
+      impact: '无法追踪邮件效果，数据中心打开率显示 0',
+      setup_url: 'https://resend.com/webhooks',
+    },
+
+    // ── Discovery ──
+    {
+      key: 'SERPAPI_KEY',
+      required: true,
+      configured: !!process.env.SERPAPI_KEY,
+      capability: 'Google/Bing/Maps 客户发现',
+      impact: '瀑布流不会自动填充新客户',
+      setup_url: 'https://serpapi.com/',
+    },
+
+    // ── Contact enrichment (high value) ──
+    {
+      key: 'APOLLO_API_KEY',
+      required: false,
+      configured: !!process.env.APOLLO_API_KEY,
+      capability: 'Apollo 265M 联系人搜索（找决策人邮箱）',
+      impact: '联系人命中率降低约 30%',
+      setup_url: 'https://apollo.io/api',
+    },
+    {
+      key: 'TOMBA_API_KEY',
+      required: false,
+      configured: !!(process.env.TOMBA_API_KEY && process.env.TOMBA_SECRET),
+      capability: '邮箱查找 + 发送前验证（降低退信率）',
+      impact: '退信率可能从 2% 飙到 15%',
+      setup_url: 'https://tomba.io/api',
+    },
+    {
+      key: 'PROXYCURL_API_KEY',
+      required: false,
+      configured: !!process.env.PROXYCURL_API_KEY,
+      capability: 'LinkedIn 公司/员工深度查询',
+      impact: 'LinkedIn 联系人信息精度下降',
+      setup_url: 'https://nubela.co/proxycurl/',
+    },
+    {
+      key: 'APIFY_API_KEY',
+      required: false,
+      configured: !!process.env.APIFY_API_KEY,
+      capability: 'IG/TikTok/Google Maps 抓取',
+      impact: '社交媒体客户发现失效',
+      setup_url: 'https://apify.com/',
+    },
+
+    // ── Other enrichment ──
+    {
+      key: 'PHANTOMBUSTER_API_KEY',
+      required: false,
+      configured: !!process.env.PHANTOMBUSTER_API_KEY,
+      capability: 'LinkedIn 批量抓取 webhook',
+      impact: 'LinkedIn 渠道无法导入',
+      setup_url: 'https://phantombuster.com/',
+    },
+    {
+      key: 'GOOGLE_CSE_API_KEY',
+      required: false,
+      configured: !!(process.env.GOOGLE_CSE_API_KEY && process.env.GOOGLE_CSE_ID),
+      capability: 'Google 自定义搜索（备用 SerpAPI）',
+      impact: '搜索引擎只靠 SerpAPI 一条腿，配额用完就停',
+      setup_url: 'https://programmablesearchengine.google.com/',
+    },
+    {
+      key: 'GITHUB_TOKEN',
+      required: false,
+      configured: !!process.env.GITHUB_TOKEN,
+      capability: 'Self-evolution（扫GitHub找新工具）',
+      impact: 'AI 学习新技能会被 GitHub 限速',
+      setup_url: 'https://github.com/settings/tokens',
+    },
+
+    // ── Config ──
+    {
+      key: 'SYSTEM_USER_ID',
+      required: true,
+      configured: !!process.env.SYSTEM_USER_ID,
+      capability: '自动化任务归属用户',
+      impact: '后台创建的数据没有归属',
+    },
+  ];
+
+  const critical_missing = checks.filter(c => c.required && !c.configured);
+  const optional_missing = checks.filter(c => !c.required && !c.configured);
+  const configured_count = checks.filter(c => c.configured).length;
+
+  // Compute capability tier
+  const tier =
+    critical_missing.length > 0 ? 'broken' :
+    optional_missing.length > 8 ? 'minimal' :
+    optional_missing.length > 4 ? 'standard' :
+    optional_missing.length > 0 ? 'enhanced' : 'full';
+
+  return NextResponse.json({
+    tier,
+    tier_label: {
+      broken: '🔴 系统无法运行',
+      minimal: '🟡 最小可用（只有核心功能）',
+      standard: '🟢 标准配置',
+      enhanced: '🟢 增强配置',
+      full: '⭐ 完整配置',
+    }[tier],
+    summary: {
+      total: checks.length,
+      configured: configured_count,
+      critical_missing: critical_missing.length,
+      optional_missing: optional_missing.length,
+    },
+    critical_missing: critical_missing.map(c => ({ key: c.key, capability: c.capability, impact: c.impact, setup_url: c.setup_url })),
+    optional_missing: optional_missing.map(c => ({ key: c.key, capability: c.capability, impact: c.impact, setup_url: c.setup_url })),
+    checks,
+  });
+}

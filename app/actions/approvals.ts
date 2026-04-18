@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { requireAuth, getCurrentProfile } from '@/lib/auth';
 import { sendEmail } from '@/lib/outreach/resend-client';
+import { verifyEmailTomba } from '@/lib/scrapers/external-tools';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -30,6 +31,19 @@ export async function approveAndSendEmail(approvalId: string, notes?: string) {
 
   if (fetchErr || !approval) {
     return { error: '邮件不存在或已处理' };
+  }
+
+  // ── Pre-send email verification via Tomba (降低退信率) ──
+  // Skip if TOMBA not configured — verification is nice-to-have
+  const verifyResult = await verifyEmailTomba(approval.to_email);
+  if (verifyResult && verifyResult.status === 'invalid') {
+    return {
+      error: `邮箱验证失败：${approval.to_email} 被 Tomba 判定为 invalid（${verifyResult.disposable ? '一次性邮箱' : '域名/SMTP无效'}）。请先修复联系方式。`,
+    };
+  }
+  if (verifyResult && verifyResult.status === 'risky') {
+    // Warn but allow — admin has already approved the content
+    console.warn(`[Approval] ${approval.to_email} marked as risky by Tomba, sending anyway (score=${verifyResult.score})`);
   }
 
   // Send via Resend immediately (use service client to bypass RLS for update)

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import EnvHealth from './EnvHealth';
 
 interface Metric {
   hour_bucket: string;
@@ -140,6 +141,9 @@ export default function SupervisorDashboard({ metrics, alerts, recentJobs, total
               </div>
             )}
           </div>
+
+          {/* Env config health */}
+          <EnvHealth />
 
           {/* Health status */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">

@@ -17,6 +17,7 @@ interface Stats {
   blocked_generic_count: number;
   queue_pending: number;
   pending_approvals: number;
+  c_grade_count?: number;
 }
 
 export default function QuickActions({ stats }: { stats: Stats }) {
@@ -32,6 +33,27 @@ export default function QuickActions({ stats }: { stats: Stats }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dry_run: false, max_leads: count, target: 'untouched' }),
+      });
+      const data = await res.json();
+      if (data.error) setResult(`❌ ${data.error}`);
+      else setResult(`✅ ${data.message}`);
+    } catch (e: any) {
+      setResult(`❌ ${e.message}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function triageCGrade(action: 'nurture' | 'archive') {
+    const label = action === 'nurture' ? '转入培育池（每季度检查）' : '批量归档（标记为 disqualified）';
+    if (!confirm(`确认把 C 级低质量线索 ${label}？最多处理 50 条。`)) return;
+    setBusy('triage');
+    setResult(null);
+    try {
+      const res = await fetch('/api/leads/bulk-triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, grade: 'C', max: 50 }),
       });
       const data = await res.json();
       if (data.error) setResult(`❌ ${data.error}`);
@@ -59,7 +81,7 @@ export default function QuickActions({ stats }: { stats: Stats }) {
     }
   }
 
-  if (stats.untouched_count === 0 && stats.blocked_generic_count === 0 && stats.pending_approvals === 0) {
+  if (stats.untouched_count === 0 && stats.blocked_generic_count === 0 && stats.pending_approvals === 0 && !stats.c_grade_count) {
     return null; // nothing to show
   }
 
@@ -126,6 +148,35 @@ export default function QuickActions({ stats }: { stats: Stats }) {
             </div>
             <div className="text-xs text-purple-600 mt-2">→ 去审批队列</div>
           </a>
+        )}
+
+        {/* C-grade cleanup */}
+        {(stats.c_grade_count || 0) > 0 && (
+          <div className="text-left p-3 bg-white border border-gray-200 rounded hover:shadow-sm transition-all">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-xs text-gray-500">C级低质量</div>
+                <div className="text-lg font-bold text-gray-700 mt-0.5">{stats.c_grade_count}</div>
+              </div>
+              <span className="text-xl">🧹</span>
+            </div>
+            <div className="flex gap-1 mt-2">
+              <button
+                onClick={() => triageCGrade('nurture')}
+                disabled={busy !== null}
+                className="flex-1 text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-50"
+              >
+                {busy === 'triage' ? '...' : '→ 培育池'}
+              </button>
+              <button
+                onClick={() => triageCGrade('archive')}
+                disabled={busy !== null}
+                className="flex-1 text-xs px-2 py-1 bg-red-50 text-red-700 rounded hover:bg-red-100 disabled:opacity-50"
+              >
+                {busy === 'triage' ? '...' : '归档'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { extractDomain } from '@/lib/growth/lead-engine';
 import { searchTomba, googleEmailHunt, generateEmailPermutations, extractInstagramEmail, enrichCompanyInfo, scrapeShopifyStore } from './external-tools';
+import { searchApollo } from './learned-skills-v2';
 
 /**
  * Multi-Layer Contact Hunter
@@ -787,6 +788,38 @@ export async function huntContacts(
         }
         result.methods_used.push('tomba.io');
       }
+    } catch {}
+  }
+
+  // Tool 1b: Apollo.io — 265M+ B2B contacts (free tier: limited but useful)
+  // Filters by decision-maker titles: founder, CEO, buyer, sourcing, procurement
+  if (result.emails.filter(e => e.confidence >= 80).length === 0) {
+    try {
+      const apolloContacts = await searchApollo(domain);
+      for (const contact of apolloContacts) {
+        // Add email if present
+        if (contact.email && !result.emails.find(e => e.email === contact.email)) {
+          result.emails.push({
+            email: contact.email,
+            source: `apollo:${contact.title}`,
+            confidence: 88, // High — Apollo verifies
+          });
+        }
+        // Add contact with title (improves strategy generation)
+        if (contact.name && !result.contacts.find(c => c.name === contact.name)) {
+          result.contacts.push({
+            name: contact.name,
+            title: contact.title,
+            email: contact.email || undefined,
+            linkedin: contact.linkedin || undefined,
+          });
+        }
+        // Add LinkedIn URL
+        if (contact.linkedin && !result.social.find(s => s.url === contact.linkedin)) {
+          result.social.push({ platform: 'linkedin', url: contact.linkedin });
+        }
+      }
+      if (apolloContacts.length > 0) result.methods_used.push(`apollo(${apolloContacts.length})`);
     } catch {}
   }
 

@@ -74,9 +74,9 @@ export default async function WorkspacePage() {
 
   // ── Admin quick-action stats ────────────────────────────────────────
   const isAdmin = role === '管理员';
-  let adminStats = { untouched_count: 0, blocked_generic_count: 0, queue_pending: 0, pending_approvals: 0 };
+  let adminStats = { untouched_count: 0, blocked_generic_count: 0, queue_pending: 0, pending_approvals: 0, c_grade_count: 0 };
   if (isAdmin) {
-    const [untouchedRes, blockedRes, approvalsRes] = await Promise.all([
+    const [untouchedRes, blockedRes, approvalsRes, cGradeRes] = await Promise.all([
       supabase.from('growth_leads')
         .select('id', { count: 'exact', head: true })
         .neq('status', 'disqualified')
@@ -88,12 +88,18 @@ export default async function WorkspacePage() {
       supabase.from('pending_email_approvals')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'pending'),
+      supabase.from('growth_leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('grade', 'C')
+        .neq('status', 'disqualified')
+        .neq('outreach_status', 'nurture_pool'),
     ]);
     adminStats = {
       untouched_count: untouchedRes.count || 0,
       blocked_generic_count: blockedRes.count || 0,
       queue_pending: queuePending || 0,
       pending_approvals: approvalsRes.count || 0,
+      c_grade_count: cGradeRes.count || 0,
     };
   }
 
