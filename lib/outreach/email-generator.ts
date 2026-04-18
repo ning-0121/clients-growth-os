@@ -91,6 +91,12 @@ export async function generateColdEmail(
   const aiAnalysis = lead.ai_analysis || {};
   const hooks = extractPersonalizationHooks(lead);
 
+  // ── Extract the pre-generated strategy if it exists ──
+  // Strategy is saved by /api/ai/customer-strategy into ai_analysis.outreach_strategy
+  const strategyBundle = aiAnalysis.outreach_strategy || null;
+  const customerAnalysis = strategyBundle?.analysis || null;
+  const devStrategy = strategyBundle?.strategy || null;
+
   const ctx: ColdEmailContext = {
     company_name: lead.company_name,
     contact_name: lead.contact_name || undefined,
@@ -104,6 +110,13 @@ export async function generateColdEmail(
     personalization_hooks: hooks.length > 0 ? hooks : undefined,
     seasonal_angle: getSeasonalAngle(),
     target_market: aiAnalysis.target_market || undefined,
+    // ── Pre-generated strategy as the email backbone ──
+    strategy_company_summary: customerAnalysis?.company_summary || undefined,
+    strategy_approach: devStrategy?.approach || undefined,
+    strategy_first_touch_angle: devStrategy?.first_touch_angle || undefined,
+    strategy_talking_points: devStrategy?.key_talking_points || undefined,
+    strategy_recommended_products: customerAnalysis?.recommended_products || undefined,
+    strategy_buying_signals: customerAnalysis?.buying_signals || undefined,
     step_number: stepNumber,
     email_type: emailType,
     previous_subjects: previousSubjects,

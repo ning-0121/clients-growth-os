@@ -53,17 +53,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'AI 策略生成失败，请稍后重试' }, { status: 500 });
   }
 
-  // Include research summary in response
+  const researchSummary = research ? {
+    pages_scanned: research.website_pages_scanned,
+    products_found: research.products_found.length,
+    has_google_intel: research.google_mentions.length > 0,
+    has_linkedin_intel: !!research.linkedin_summary,
+    has_customs_data: !!research.customs_summary,
+    price_range: research.price_range,
+    employee_estimate: research.employee_count_estimate,
+  } : null;
+
+  // ── PERSIST the strategy to lead.ai_analysis so email generator can use it ──
+  try {
+    const existingAi = (lead.ai_analysis as Record<string, any>) || {};
+    await supabase.from('growth_leads').update({
+      ai_analysis: {
+        ...existingAi,
+        outreach_strategy: strategy,                // full bundle
+        strategy_generated_at: new Date().toISOString(),
+        research_summary: researchSummary,
+      },
+    }).eq('id', leadId);
+  } catch (err) {
+    console.warn('[Strategy] Failed to persist strategy:', err);
+  }
+
   return NextResponse.json({
     ...strategy,
-    research_summary: research ? {
-      pages_scanned: research.website_pages_scanned,
-      products_found: research.products_found.length,
-      has_google_intel: research.google_mentions.length > 0,
-      has_linkedin_intel: !!research.linkedin_summary,
-      has_customs_data: !!research.customs_summary,
-      price_range: research.price_range,
-      employee_estimate: research.employee_count_estimate,
-    } : null,
+    research_summary: researchSummary,
+    strategy_persisted: true,
   });
 }

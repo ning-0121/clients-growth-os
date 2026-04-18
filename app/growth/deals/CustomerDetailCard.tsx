@@ -47,6 +47,8 @@ interface EmailPreview {
   body_text: string;
   email_quality: string;
   warnings: string[];
+  angle_used?: string;
+  strategy_used?: { first_touch_angle?: string; approach?: string };
 }
 
 export default function CustomerDetailCard({ lead }: Props) {
@@ -102,14 +104,27 @@ export default function CustomerDetailCard({ lead }: Props) {
         body: JSON.stringify({ lead_id: lead.id, step_number: 1, email_type: 'intro' }),
       });
       const data = await res.json();
+
+      // Workflow gate: strategy must exist first
+      if (res.status === 428 || data.error === 'missing_strategy') {
+        setEmailError('');
+        setApprovalMsg('');
+        // Switch to strategy tab and auto-generate
+        setActiveSection('strategy');
+        if (!strategy) await loadStrategy();
+        return;
+      }
+
       if (data.error) {
-        setEmailError(data.error);
+        setEmailError(data.error_message || data.error);
       } else {
         setEmailPreview({
           subject: data.email.subject,
           body_text: data.email.body_text,
           email_quality: data.lead.email_quality,
           warnings: data.warnings || [],
+          angle_used: data.email.angle_used,
+          strategy_used: data.strategy_used,
         });
       }
     } catch {
@@ -118,6 +133,9 @@ export default function CustomerDetailCard({ lead }: Props) {
       setEmailLoading(false);
     }
   }
+
+  // Check if this lead already has a strategy (avoid calling API to check)
+  const hasStrategy = !!(lead.ai_analysis?.outreach_strategy?.strategy?.first_touch_angle) || !!strategy;
 
   async function submitForApproval() {
     if (!emailPreview) return;
@@ -313,6 +331,14 @@ export default function CustomerDetailCard({ lead }: Props) {
                 <div className="text-xs text-gray-500">
                   预期周期：{strategy.strategy.timeline}
                 </div>
+
+                {/* Next step → Email tab */}
+                <button
+                  onClick={() => setActiveSection('email')}
+                  className="w-full mt-3 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                >
+                  ✓ 策略已生成 · 下一步：撰写开发信 →
+                </button>
               </div>
             )}
           </div>
@@ -343,14 +369,66 @@ export default function CustomerDetailCard({ lead }: Props) {
                   )}
                 </div>
 
-                {/* Generate preview button */}
-                {!emailPreview && (
+                {/* Workflow progress indicator */}
+                <div className="flex items-center gap-2 text-xs bg-blue-50 border border-blue-100 rounded p-2">
+                  <span className="font-medium text-blue-800">开发流程：</span>
+                  <WorkflowStep num={1} label="客户分析" done={!!lead.ai_analysis?.is_apparel_company} />
+                  <span className="text-blue-400">→</span>
+                  <WorkflowStep num={2} label="开发策略" done={hasStrategy} />
+                  <span className="text-blue-400">→</span>
+                  <WorkflowStep num={3} label="开发信" done={!!emailPreview} />
+                  <span className="text-blue-400">→</span>
+                  <WorkflowStep num={4} label={isHighValue ? '审批' : '发送'} done={false} />
+                </div>
+
+                {/* STRATEGY GATE: must generate strategy first */}
+                {!hasStrategy && !emailPreview && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="flex items-start gap-2">
+                      <span className="text-amber-500 text-lg">⚠️</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-800">需要先生成客户策略</p>
+                        <p className="text-xs text-amber-700 mt-1">
+                          高质量开发信必须建立在客户分析 + 策略之上。请先在「开发策略」Tab 运行 AI 深度调研，
+                          系统会分析客户网站/产品/采购数据，生成专属的开发切入点，然后邮件会基于策略撰写。
+                        </p>
+                        <button
+                          onClick={() => { setActiveSection('strategy'); if (!strategy) loadStrategy(); }}
+                          className="mt-3 px-4 py-2 text-xs font-medium text-white bg-amber-600 rounded hover:bg-amber-700"
+                        >
+                          → 跳转到开发策略 Tab 开始调研
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Strategy summary (shown when strategy exists, before email is generated) */}
+                {hasStrategy && !emailPreview && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <span className="text-green-500">✓</span>
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-green-800">策略已就绪</p>
+                        {(strategy?.strategy?.first_touch_angle || lead.ai_analysis?.outreach_strategy?.strategy?.first_touch_angle) && (
+                          <p className="text-xs text-green-700 mt-1">
+                            <span className="font-medium">切入角度：</span>
+                            {strategy?.strategy?.first_touch_angle || lead.ai_analysis?.outreach_strategy?.strategy?.first_touch_angle}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generate preview button — only shown if strategy exists */}
+                {hasStrategy && !emailPreview && (
                   <button
                     onClick={generateEmail}
                     disabled={emailLoading}
                     className="w-full py-3 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
                   >
-                    {emailLoading ? 'AI 正在生成个性化邮件...' : '✨ 生成 AI 开发信预览'}
+                    {emailLoading ? 'AI 基于策略生成邮件中...' : '✨ 基于策略生成 AI 开发信'}
                   </button>
                 )}
 
@@ -363,6 +441,21 @@ export default function CustomerDetailCard({ lead }: Props) {
                 {/* Preview content */}
                 {emailPreview && (
                   <div className="space-y-3">
+                    {/* Strategy execution indicator */}
+                    {emailPreview.strategy_used?.first_touch_angle && (
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2">
+                        <p className="text-xs text-indigo-700">
+                          <span className="font-medium">✓ 基于策略：</span>
+                          {emailPreview.strategy_used.first_touch_angle}
+                        </p>
+                        {emailPreview.angle_used && (
+                          <p className="text-xs text-indigo-600 mt-1">
+                            <span className="font-medium">AI 实际用的切入：</span> {emailPreview.angle_used}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Warnings */}
                     {emailPreview.warnings.length > 0 && (
                       <div className="space-y-1">
@@ -480,6 +573,19 @@ function ScriptSection({ title, content }: { title: string; content: string }) {
     <div>
       <div className="text-xs font-medium text-gray-700 mb-1">{title}</div>
       <div className="bg-gray-50 rounded p-2 text-sm text-gray-700 whitespace-pre-line">{content}</div>
+    </div>
+  );
+}
+
+function WorkflowStep({ num, label, done }: { num: number; label: string; done: boolean }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold ${
+        done ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+      }`}>
+        {done ? '✓' : num}
+      </span>
+      <span className={done ? 'text-green-700 font-medium' : 'text-gray-500'}>{label}</span>
     </div>
   );
 }

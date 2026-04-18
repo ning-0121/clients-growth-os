@@ -34,10 +34,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
+    // ── WORKFLOW GATE: Strategy must exist before generating email ──
+    // This ensures the email is built on top of customer analysis, not generic templates.
+    const aiAnalysis = (lead.ai_analysis as Record<string, any>) || {};
+    const hasStrategy = !!(aiAnalysis.outreach_strategy?.strategy?.first_touch_angle);
+
+    if (!hasStrategy) {
+      return NextResponse.json({
+        error: 'missing_strategy',
+        error_message: '请先在「开发策略」Tab 生成客户策略，邮件需要基于策略撰写',
+        action_required: 'generate_strategy_first',
+      }, { status: 428 }); // 428 Precondition Required
+    }
+
     // Check email quality
     const emailQuality = classifyEmailQuality(lead.contact_email || '');
 
-    // Generate email preview
+    // Generate email preview (uses strategy from lead.ai_analysis.outreach_strategy)
     const email = await generateColdEmail(
       lead,
       step_number,
@@ -64,6 +77,11 @@ export async function POST(request: Request) {
         body_html: email.body_html,
         step_number,
         email_type,
+        angle_used: email.angle_used,
+      },
+      strategy_used: {
+        first_touch_angle: aiAnalysis.outreach_strategy?.strategy?.first_touch_angle,
+        approach: aiAnalysis.outreach_strategy?.strategy?.approach,
       },
       warnings: [
         ...(emailQuality === 'generic' ? [`⚠️ Generic email (${lead.contact_email}) — will likely go to spam or wrong person`] : []),

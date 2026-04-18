@@ -134,6 +134,13 @@ export interface ColdEmailContext {
   seasonal_angle?: string;            // e.g. "spring/summer season buying happening now"
   pain_point?: string;                // e.g. "sourcing manager left, production delays"
   target_market?: string;             // e.g. "US yoga studios and boutique fitness retailers"
+  // ── AI Strategy (generated before this email) ──
+  strategy_approach?: string;              // Overall sales approach for this specific customer
+  strategy_first_touch_angle?: string;     // The specific angle to use in first email
+  strategy_talking_points?: string[];      // Key points AI identified as resonating
+  strategy_recommended_products?: string[]; // Specific products to pitch
+  strategy_buying_signals?: string[];      // Signals AI found that suggest they're ready to buy
+  strategy_company_summary?: string;       // AI's company summary
   // ── Sequence context ──
   step_number: number;
   email_type: EmailType;
@@ -173,6 +180,27 @@ export function buildColdEmailPrompt(ctx: ColdEmailContext): string {
     ? `\nPERSONALIZATION RESEARCH:\n${personalizationLines.join('\n')}`
     : '';
 
+  // ── STRATEGY BLOCK — this is the backbone of the email ──
+  // If a strategy was pre-generated for this customer, we BUILD the email around it.
+  // This is a hard requirement: the email must execute the strategy, not just reference data.
+  const strategyLines: string[] = [];
+  if (ctx.strategy_company_summary) strategyLines.push(`Who they are: ${ctx.strategy_company_summary}`);
+  if (ctx.strategy_approach) strategyLines.push(`Overall approach decided by strategy: ${ctx.strategy_approach}`);
+  if (ctx.strategy_first_touch_angle) strategyLines.push(`⭐ FIRST-TOUCH ANGLE (use this for the intro email): ${ctx.strategy_first_touch_angle}`);
+  if (ctx.strategy_talking_points?.length) {
+    strategyLines.push(`Key talking points the strategy surfaced:`);
+    ctx.strategy_talking_points.forEach(p => strategyLines.push(`  • ${p}`));
+  }
+  if (ctx.strategy_recommended_products?.length) {
+    strategyLines.push(`Specific products to pitch: ${ctx.strategy_recommended_products.join(', ')}`);
+  }
+  if (ctx.strategy_buying_signals?.length) {
+    strategyLines.push(`Buying signals detected (leverage these): ${ctx.strategy_buying_signals.join('; ')}`);
+  }
+  const strategyBlock = strategyLines.length
+    ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🎯 PRE-APPROVED STRATEGY (EXECUTE THIS — don't improvise):\n${strategyLines.join('\n')}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+    : '';
+
   const emailTypeInstructions: Record<EmailType, string> = {
     intro: `FIRST cold email. Goal: prove you actually looked at their business (not template spam), mention ONE specific observation about them, connect it to ONE thing we can offer. Maximum 80 words. Single question CTA.
 
@@ -203,6 +231,7 @@ Products: ${ctx.product_categories?.join(', ') || 'apparel'}
 Company type: ${ctx.company_type || 'unknown'}, Scale: ${ctx.scale_estimate || 'unknown'}
 ${tradeInfo}
 ${personalizationBlock}
+${strategyBlock}
 ${prevContext}
 
 EMAIL TYPE: ${ctx.email_type.toUpperCase()} (step ${ctx.step_number})
@@ -210,19 +239,19 @@ ${emailTypeInstructions[ctx.email_type]}
 
 NON-NEGOTIABLE RULES:
 1. Under 100 words for intro/follow-up, under 120 for value_add, under 40 for breakup
-2. ONE specific observation about their business (not generic "I like your brand")
-3. ONE capability match (not a list of 5 things we do)
-4. ONE question CTA (not "let's hop on a call", more like "would samples make sense?")
-5. No "I hope this finds you well", no "Dear Sir/Madam", no corporate language
-6. No emojis
-7. If no contact name: skip the salutation, start directly with the observation
-8. If you have personalization hooks: USE THEM — the first line must reference something specific
+2. If a STRATEGY BLOCK is present → execute the "FIRST-TOUCH ANGLE" + weave in one talking point. Do NOT improvise your own angle.
+3. If no strategy → ONE specific observation from research (not generic "I like your brand")
+4. ONE capability match tied to their strategy's recommended products (not a generic list)
+5. ONE question CTA (not "let's hop on a call", more like "would samples make sense?")
+6. No "I hope this finds you well", no "Dear Sir/Madam", no corporate language
+7. No emojis
+8. If no contact name: skip the salutation, start directly with the observation
 
 Respond with a JSON object (no markdown, no code fences):
 {
   "subject": string (under 45 chars, lowercase, curiosity-inducing — NOT "Introducing JOJO Fashion"),
   "body_text": string (plain text email body, no signatures — we add those separately),
   "body_html": string (same wrapped in simple HTML paragraphs, no styling),
-  "angle_used": string (1-sentence description of the personalization angle used, for tracking)
+  "angle_used": string (1-sentence description of the angle used — reference the strategy's first_touch_angle if strategy was provided)
 }`;
 }
