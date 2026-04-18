@@ -5,6 +5,14 @@
       "schedule": "15 * * * *"
     },
     {
+      "path": "/api/discovery/faire",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/discovery/instagram-dork",
+      "schedule": "45 */4 * * *"
+    },
+    {
       "path": "/api/cron/auto-source",
       "schedule": "*/10 * * * *"
     },

@@ -8,6 +8,7 @@ import LeadActionPanel from '../my-today/LeadActionPanel';
 import { calculateAIDailyProgress } from '@/lib/config/daily-targets';
 import { scanAllRisks, RiskAlert } from '@/lib/growth/risk-monitor';
 import QuickActions from './QuickActions';
+import DiscoveryChannels from './DiscoveryChannels';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,6 +146,9 @@ export default async function WorkspacePage() {
             今天有 {overdueCount + firstTouchCount} 个客户需要你跟进
           </p>
         </div>
+
+        {/* Admin discovery channels (multi-source lead generation) */}
+        {isAdmin && <DiscoveryChannels />}
 
         {/* Admin quick actions (use-rate booster) */}
         {isAdmin && <QuickActions stats={adminStats} />}
