@@ -8,20 +8,37 @@ import { enrollLeadInSequence } from '@/lib/outreach/sequence-engine';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
-// Status → which round to run next
-const STATUS_TO_ROUND: Record<string, number> = {
-  pending: 1,
-  round_1: 2,
-  round_2: 3,
-  round_3: 4,
-};
+// Feature flag: skip customs verification (Round 3) until customs data is loaded
+const SKIP_CUSTOMS_ROUND = process.env.SKIP_CUSTOMS_VERIFICATION !== 'false'; // default true
 
-const NEXT_STATUS: Record<number, string> = {
-  1: 'round_1',
-  2: 'round_2',
-  3: 'round_3',
-  4: 'completed',
-};
+// Status → which round to run next
+// When customs is disabled: pending→1, round_1→2, round_2→4 (skip 3)
+const STATUS_TO_ROUND: Record<string, number> = SKIP_CUSTOMS_ROUND
+  ? {
+      pending: 1,
+      round_1: 2,
+      round_2: 4,   // jump directly to composite scoring, skip customs
+      round_3: 4,   // handle any leads already at round_3 status
+    }
+  : {
+      pending: 1,
+      round_1: 2,
+      round_2: 3,
+      round_3: 4,
+    };
+
+const NEXT_STATUS: Record<number, string> = SKIP_CUSTOMS_ROUND
+  ? {
+      1: 'round_1',
+      2: 'round_3',   // mark as round_3 so the status field stays valid, but we'll run round 4 next
+      4: 'completed',
+    }
+  : {
+      1: 'round_1',
+      2: 'round_2',
+      3: 'round_3',
+      4: 'completed',
+    };
 
 // Timeout: leads stuck >24h get marked as failed
 const STUCK_TIMEOUT_MS = 24 * 60 * 60 * 1000;

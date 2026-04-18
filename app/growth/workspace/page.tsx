@@ -7,6 +7,7 @@ import { GrowthLead } from '@/lib/types';
 import LeadActionPanel from '../my-today/LeadActionPanel';
 import { calculateAIDailyProgress } from '@/lib/config/daily-targets';
 import { scanAllRisks, RiskAlert } from '@/lib/growth/risk-monitor';
+import QuickActions from './QuickActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,6 +72,31 @@ export default async function WorkspacePage() {
   // Risk alerts
   const riskAlerts = await scanAllRisks(supabase);
 
+  // ── Admin quick-action stats ────────────────────────────────────────
+  const isAdmin = role === '管理员';
+  let adminStats = { untouched_count: 0, blocked_generic_count: 0, queue_pending: 0, pending_approvals: 0 };
+  if (isAdmin) {
+    const [untouchedRes, blockedRes, approvalsRes] = await Promise.all([
+      supabase.from('growth_leads')
+        .select('id', { count: 'exact', head: true })
+        .neq('status', 'disqualified')
+        .or('outreach_status.is.null,outreach_status.eq.none')
+        .not('contact_email', 'is', null),
+      supabase.from('growth_leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('outreach_status', 'blocked_generic_email'),
+      supabase.from('pending_email_approvals')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending'),
+    ]);
+    adminStats = {
+      untouched_count: untouchedRes.count || 0,
+      blocked_generic_count: blockedRes.count || 0,
+      queue_pending: queuePending || 0,
+      pending_approvals: approvalsRes.count || 0,
+    };
+  }
+
   // Bucketing
   const buckets = {
     overdue: [] as typeof leads,
@@ -113,6 +139,9 @@ export default async function WorkspacePage() {
             今天有 {overdueCount + firstTouchCount} 个客户需要你跟进
           </p>
         </div>
+
+        {/* Admin quick actions (use-rate booster) */}
+        {isAdmin && <QuickActions stats={adminStats} />}
 
         {/* System auto-discovery summary */}
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4 mb-6">

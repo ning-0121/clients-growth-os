@@ -114,7 +114,7 @@ export default function LeadsTabSwitcher({ leads, isAdmin, customers, configs, t
     { id: 'all', label: '全部客户', count: activeLeads.length, show: true },
     { id: 'ai_discovery', label: 'AI 自动开发', show: true },
     { id: 'phantombuster', label: 'LinkedIn 导入', show: true },
-    { id: 'customs', label: '海关数据', show: true },
+    { id: 'customs', label: '海关数据', show: false },  // 停用：无数据源
     { id: 'import', label: '智能导入', show: true },
     { id: 'boss', label: '老板关注', count: bossCount, show: isAdmin },
   ];

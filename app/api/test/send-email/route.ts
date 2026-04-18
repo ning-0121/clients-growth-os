@@ -18,11 +18,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let to = 'ningq0615@gmail.com'; // default test recipient
+  // Require explicit recipient — no hardcoded default
+  let to: string | undefined;
   try {
     const body = await request.json();
-    if (body.to) to = body.to;
+    to = body.to;
   } catch {}
+
+  if (!to || !to.includes('@')) {
+    return NextResponse.json({
+      error: 'Missing recipient. POST body must include { "to": "test@example.com" }',
+    }, { status: 400 });
+  }
 
   const result = await sendEmail({
     to,
