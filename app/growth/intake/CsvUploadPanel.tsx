@@ -2,9 +2,24 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import { parseCSV, autoDetectMapping, computeClientWarnings, ParsedCSV } from '@/lib/growth/csv-parser';
 import { runCsvIntake, checkCsvDuplicates } from '@/app/actions/csv-intake';
 import { LeadSource, CSVColumnMapping } from '@/lib/types';
+
+/**
+ * Read an xlsx/xls file and convert it to CSV text that our parser can handle.
+ * Uses the xlsx (SheetJS) library.
+ */
+async function xlsxFileToCsv(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const firstSheet = wb.SheetNames[0];
+  if (!firstSheet) throw new Error('Excel 文件中没有工作表');
+  const worksheet = wb.Sheets[firstSheet];
+  // Convert to CSV, preserving empty cells
+  return XLSX.utils.sheet_to_csv(worksheet, { blankrows: false });
+}
 
 const SOURCE_OPTIONS: { value: LeadSource; label: string }[] = [
   { value: 'linkedin', label: 'LinkedIn' },
@@ -45,19 +60,36 @@ export default function CsvUploadPanel() {
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<{ success?: boolean; error?: string; total?: number; qualified?: number; disqualified?: number; duplicates?: number } | null>(null);
 
+  const readFile = async (file: File): Promise<string> => {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      return xlsxFileToCsv(file);
+    }
+    return file.text();
+  };
+
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    loadCsv(text);
+    try {
+      const text = await readFile(file);
+      loadCsv(text);
+    } catch (err: any) {
+      setResult({ error: `文件解析失败：${err.message}` });
+    }
     if (fileRef.current) fileRef.current.value = '';
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    file.text().then(loadCsv);
+    try {
+      const text = await readFile(file);
+      loadCsv(text);
+    } catch (err: any) {
+      setResult({ error: `文件解析失败：${err.message}` });
+    }
   }, []);
 
   const loadCsv = (text: string) => {
@@ -140,15 +172,15 @@ export default function CsvUploadPanel() {
           className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-indigo-400 transition-colors"
         >
           <p className="text-sm text-gray-600 mb-2">
-            拖放 CSV 文件或点击浏览
+            拖放 Excel / CSV 文件或点击浏览
           </p>
           <p className="text-xs text-gray-400 mb-4">
-            支持 PhantomBuster 导出，最多 200 行
+            支持 .xlsx / .xls / .csv，最多 200 行（PhantomBuster / 手工整理均可）
           </p>
           <input
             ref={fileRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             onChange={handleFile}
             className="hidden"
             id="csv-file"

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import CustomerDetailCard from './CustomerDetailCard';
 
 type TabId = 'today' | 'awaiting' | 'replied' | 'silent';
+type CategoryFilter = 'all' | 'A' | 'B' | 'C' | 'D';
 
 interface Props {
   todayLeads: any[];
@@ -12,6 +13,7 @@ interface Props {
   silentLeads: any[];
   isAdmin: boolean;
   salesStaff: any[];
+  initialCategoryFilter?: CategoryFilter;
 }
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; bgColor: string; border: string }> = {
@@ -21,9 +23,18 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; bgColor: s
   D: { label: 'D级', color: 'text-gray-500', bgColor: 'bg-gray-100', border: 'border-gray-200' },
 };
 
-export default function DealsTabs({ todayLeads, awaitingReply, repliedLeads, silentLeads, isAdmin, salesStaff }: Props) {
+export default function DealsTabs({ todayLeads, awaitingReply, repliedLeads, silentLeads, isAdmin, salesStaff, initialCategoryFilter = 'all' }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('today');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>(initialCategoryFilter);
+
+  // Count by category across all leads
+  const categoryCounts = {
+    A: todayLeads.filter((l: any) => l.category === 'A').length,
+    B: todayLeads.filter((l: any) => l.category === 'B').length,
+    C: todayLeads.filter((l: any) => l.category === 'C').length,
+    D: todayLeads.filter((l: any) => l.category === 'D').length,
+  };
 
   const tabs: { id: TabId; label: string; count: number }[] = [
     { id: 'today', label: '今日客户', count: todayLeads.length },
@@ -37,14 +48,48 @@ export default function DealsTabs({ todayLeads, awaitingReply, repliedLeads, sil
     : activeTab === 'replied' ? repliedLeads
     : silentLeads;
 
+  // Apply category filter
+  const filtered = categoryFilter === 'all'
+    ? currentLeads
+    : currentLeads.filter((l: any) => l.category === categoryFilter);
+
   // Sort by category A→B→C→D
-  const sorted = [...currentLeads].sort((a, b) => {
+  const sorted = [...filtered].sort((a, b) => {
     const order = { A: 0, B: 1, C: 2, D: 3 };
     return (order[a.category as keyof typeof order] || 3) - (order[b.category as keyof typeof order] || 3);
   });
 
   return (
     <div className="bg-white rounded-lg border border-gray-200">
+      {/* Category filter chips (click counter cards above to filter) */}
+      <div className="flex gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50 overflow-x-auto">
+        <button
+          onClick={() => setCategoryFilter('all')}
+          className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+            categoryFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          全部等级 <span className="ml-1 opacity-70">{currentLeads.length}</span>
+        </button>
+        {(['A', 'B', 'C', 'D'] as const).map(cat => {
+          const cfg = CATEGORY_CONFIG[cat];
+          const count = currentLeads.filter((l: any) => l.category === cat).length;
+          return (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                categoryFilter === cat
+                  ? `${cfg.bgColor} ${cfg.color} ring-2 ring-offset-1 ring-${cat === 'A' ? 'green' : cat === 'B' ? 'blue' : cat === 'C' ? 'amber' : 'gray'}-400`
+                  : `bg-white ${cfg.color} hover:bg-gray-100`
+              }`}
+            >
+              {cfg.label} <span className="ml-1 opacity-70">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Tabs */}
       <div className="flex overflow-x-auto border-b border-gray-200">
         {tabs.map((tab) => (

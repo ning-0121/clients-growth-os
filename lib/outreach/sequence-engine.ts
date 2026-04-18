@@ -10,26 +10,70 @@ interface SequenceStep {
 }
 
 /**
+ * Generic/role-based email prefixes that should NOT receive cold outreach.
+ * These go to nobody in particular and get marked as spam.
+ */
+const GENERIC_EMAIL_PREFIXES = [
+  'info', 'hello', 'hi', 'hey', 'contact', 'sales', 'support', 'help',
+  'customerservice', 'service', 'care', 'team', 'admin', 'office',
+  'noreply', 'no-reply', 'donotreply', 'do-not-reply',
+  'mail', 'email', 'post', 'webmaster', 'feedback',
+  'press', 'media', 'pr', 'marketing', 'orders', 'billing',
+  'accounts', 'accounting', 'hr', 'jobs', 'careers', 'hiring',
+  'legal', 'compliance', 'privacy', 'security',
+  'shop', 'store', 'wholesale', 'buy', 'purchasing',
+];
+
+/**
+ * Check if an email is a generic/role-based address.
+ * Returns a quality tier: 'personal' | 'generic' | 'unknown'
+ */
+export function classifyEmailQuality(email: string): 'personal' | 'generic' | 'unknown' {
+  if (!email || !email.includes('@')) return 'unknown';
+  const local = email.split('@')[0].toLowerCase().replace(/[^a-z]/g, '');
+  if (GENERIC_EMAIL_PREFIXES.includes(local)) return 'generic';
+  // Personal emails usually have a name (contains letters, possibly numbers/dots)
+  // Simple heuristic: if it looks like a name pattern, it's personal
+  if (local.length >= 3 && /[a-z]/.test(local)) return 'personal';
+  return 'unknown';
+}
+
+/**
  * Enroll a lead into an outreach sequence.
- * Skips if lead has no email or is already in an active campaign.
+ * Skips if lead has no email, generic email, or is already in an active campaign.
  */
 export async function enrollLeadInSequence(
   leadId: string,
   sequenceId: string,
   supabase: SupabaseClient
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailQuality?: string }> {
   // Check lead has email
   const { data: lead } = await supabase
     .from('growth_leads')
-    .select('id, contact_email, outreach_status')
+    .select('id, contact_email, outreach_status, company_name')
     .eq('id', leadId)
     .single();
 
   if (!lead) return { success: false, error: 'Lead not found' };
-  if (!lead.contact_email) return { success: false, error: 'Lead has no email' };
+  if (!lead.contact_email) return { success: false, error: 'Lead has no email — run enrichment first' };
   if (lead.outreach_status === 'replied' || lead.outreach_status === 'opted_out') {
     return { success: false, error: `Lead outreach_status is ${lead.outreach_status}` };
   }
+
+  // ── EMAIL QUALITY GATE ──────────────────────────────────────────────────
+  const emailQuality = classifyEmailQuality(lead.contact_email);
+  if (emailQuality === 'generic') {
+    // Tag lead so we know why it was skipped — don't just silently skip
+    await supabase.from('growth_leads').update({
+      outreach_status: 'blocked_generic_email',
+    }).eq('id', leadId);
+    return {
+      success: false,
+      error: `Generic email blocked: ${lead.contact_email}. Need personal email (first.last@ format) before sending.`,
+      emailQuality,
+    };
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   // Check no active campaign exists
   const { data: existing } = await supabase
@@ -89,12 +133,15 @@ export async function processOutreachQueue(
   const result = { sent: 0, failed: 0, completed: 0 };
 
   // Find campaigns ready to send
+  // IMPORTANT: A/B grade leads require manual approval — they go through
+  // pending_email_approvals queue, NOT through auto-send here.
+  // Only C/D grade or uncategorized leads auto-send.
   const { data: campaigns } = await supabase
     .from('outreach_campaigns')
     .select(`
       id, lead_id, sequence_id, current_step,
       outreach_sequences!inner(steps),
-      growth_leads!inner(id, company_name, contact_name, contact_email, website, ai_analysis, customs_summary)
+      growth_leads!inner(id, company_name, contact_name, contact_email, website, ai_analysis, customs_summary, category, grade)
     `)
     .eq('status', 'active')
     .lte('next_send_at', now)
@@ -112,21 +159,44 @@ export async function processOutreachQueue(
       continue;
     }
 
+    // Double-check email quality at send time
+    if (classifyEmailQuality(lead.contact_email) === 'generic') {
+      await supabase.from('outreach_campaigns').update({ status: 'paused', updated_at: now }).eq('id', campaign.id);
+      await supabase.from('growth_leads').update({ outreach_status: 'blocked_generic_email' }).eq('id', campaign.lead_id);
+      result.failed++;
+      continue;
+    }
+
+    // ── APPROVAL GATE: A/B grade leads MUST go through pending_email_approvals ──
+    // The cron does NOT auto-send them. Sales must manually submit + admin approves.
+    const leadCategory = (lead as any).category || ((lead as any).grade === 'A' || (lead as any).grade === 'B' ? (lead as any).grade : null);
+    if (leadCategory === 'A' || leadCategory === 'B') {
+      // Pause the campaign — don't auto-send high-value leads
+      await supabase.from('outreach_campaigns')
+        .update({ status: 'paused', updated_at: now })
+        .eq('id', campaign.id);
+      result.failed++; // not really failed, but skipped
+      continue;
+    }
+    // C/D or uncategorized leads continue to auto-send below
+
     // Get previous email subjects for context
     const { data: prevEmails } = await supabase
       .from('outreach_emails')
-      .select('subject')
+      .select('subject, angle_used')
       .eq('campaign_id', campaign.id)
       .order('step_number', { ascending: true });
 
     const previousSubjects = (prevEmails || []).map((e: any) => e.subject);
+    const previousAngles = (prevEmails || []).map((e: any) => e.angle_used).filter(Boolean);
 
-    // Generate email via AI
+    // Generate email via AI (with personalization hooks + previous angle tracking)
     const email = await generateColdEmail(
       lead,
       campaign.current_step,
       currentStepConfig.email_type,
-      previousSubjects
+      previousSubjects,
+      previousAngles
     );
 
     if (!email) {
@@ -169,14 +239,16 @@ export async function processOutreachQueue(
       continue;
     }
 
-    // Log sent email
+    // Log sent email (include body_text for visibility in dashboard)
     await supabase.from('outreach_emails').insert({
       campaign_id: campaign.id,
       lead_id: campaign.lead_id,
       step_number: campaign.current_step,
       resend_message_id: sendResult.id,
       subject: email.subject,
+      body_text: email.body_text,
       body_html: email.body_html,
+      angle_used: email.angle_used || null,
       to_email: lead.contact_email,
       status: 'sent',
       sent_at: now,

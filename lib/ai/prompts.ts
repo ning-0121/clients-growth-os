@@ -121,66 +121,108 @@ export type EmailType = 'intro' | 'follow_up' | 'value_add' | 'breakup';
 export interface ColdEmailContext {
   company_name: string;
   contact_name?: string;
+  contact_role?: string;          // e.g. "Head of Sourcing", "Buying Director"
   website?: string;
   product_categories?: string[];
   company_type?: string;
   scale_estimate?: string;
   outreach_recommendation?: string;
   customs_summary?: Record<string, any>;
+  // ── Deep personalization hooks (from pre-research) ──
+  personalization_hooks?: string[];   // e.g. ["just launched a spring yoga line", "expanded to 12 stores"]
+  company_news?: string;              // recent news/funding/expansion
+  seasonal_angle?: string;            // e.g. "spring/summer season buying happening now"
+  pain_point?: string;                // e.g. "sourcing manager left, production delays"
+  target_market?: string;             // e.g. "US yoga studios and boutique fitness retailers"
+  // ── Sequence context ──
   step_number: number;
   email_type: EmailType;
   previous_subjects?: string[];
+  previous_angles?: string[];         // what hooks were already used
 }
 
+/**
+ * Build a cold email prompt optimized for high reply rates.
+ *
+ * Based on GitHub research (kaymen99/sales-outreach-automation-langgraph + 2025 benchmarks):
+ * - Deep personalization (referencing specifics) doubles reply rate: 9% → 18%
+ * - Under 100 words for first email: 12% vs 2% for 200+ words
+ * - Single CTA, casual tone, no corporate filler
+ * - 55% of replies come from follow-ups — sequence matters
+ */
 export function buildColdEmailPrompt(ctx: ColdEmailContext): string {
   const prevContext = ctx.previous_subjects?.length
-    ? `\nPrevious emails sent (do NOT repeat these angles):\n${ctx.previous_subjects.map((s, i) => `  ${i + 1}. Subject: "${s}"`).join('\n')}`
+    ? `\nPrevious emails (MUST use different angles, do not repeat):\n${ctx.previous_subjects.map((s, i) => `  ${i + 1}. Subject: "${s}"${ctx.previous_angles?.[i] ? ` (angle: ${ctx.previous_angles[i]})` : ''}`).join('\n')}`
     : '';
 
   const tradeInfo = ctx.customs_summary
-    ? `\nTrade data: This company imports apparel (${JSON.stringify(ctx.customs_summary)}).`
+    ? `\nTrade data: ${JSON.stringify(ctx.customs_summary)} — they already import apparel, so they have sourcing infrastructure.`
+    : '';
+
+  // Build personalization block — the most important part
+  const personalizationLines: string[] = [];
+  if (ctx.personalization_hooks?.length) {
+    personalizationLines.push(`Key observations about their business:`);
+    ctx.personalization_hooks.forEach(h => personalizationLines.push(`  • ${h}`));
+  }
+  if (ctx.company_news) personalizationLines.push(`Recent news: ${ctx.company_news}`);
+  if (ctx.seasonal_angle) personalizationLines.push(`Seasonal timing: ${ctx.seasonal_angle}`);
+  if (ctx.pain_point) personalizationLines.push(`Potential pain point: ${ctx.pain_point}`);
+  if (ctx.target_market) personalizationLines.push(`Their target market: ${ctx.target_market}`);
+  const personalizationBlock = personalizationLines.length
+    ? `\nPERSONALIZATION RESEARCH:\n${personalizationLines.join('\n')}`
     : '';
 
   const emailTypeInstructions: Record<EmailType, string> = {
-    intro: `This is the FIRST cold email. Goal: introduce yourself briefly, mention something specific about THEIR business that shows you did research, and suggest a quick chat. Keep it casual and short.`,
-    follow_up: `This is a follow-up (they haven't replied to the first email). Goal: provide a different angle — mention a specific capability, a recent project, or ask a question about their upcoming season. Do NOT repeat the first email. Do NOT say "following up on my last email".`,
-    value_add: `This is a value-add email. Goal: share something genuinely useful — a trend insight, a production tip, or a relevant case study. Position yourself as knowledgeable, not salesy. Make them want to reply.`,
-    breakup: `This is the final email in the sequence. Goal: be lighthearted, say you won't keep emailing, leave the door open. Keep it very short (2-3 sentences max). Something like "I'll stop bugging you — but if you ever need [X], I'm here."`,
+    intro: `FIRST cold email. Goal: prove you actually looked at their business (not template spam), mention ONE specific observation about them, connect it to ONE thing we can offer. Maximum 80 words. Single question CTA.
+
+  The #1 rule: NEVER write "I came across your company". Instead, start with the specific observation. Example opening: "Your spring yoga collection just launched — have you locked in production for the fall season yet?"`,
+
+    follow_up: `Follow-up (no reply to first email). Take a COMPLETELY different angle. Do NOT mention the previous email at all. Act like this is a fresh cold email from a different angle (different product capability, different season, different pain point). Under 80 words.`,
+
+    value_add: `Value-add email. Share one genuinely useful insight — a fabric trend, a production timing tip, a market observation specific to their category. DO NOT try to sell. Just be helpful. Make them think "this person knows their stuff." Under 100 words. End with a soft question.`,
+
+    breakup: `Final email. Lighthearted and very short (2-3 sentences max). Signal that you won't email again. Leave the door open. Example: "Last one — I promise. If your sourcing needs ever change, you know where to find me." No CTA, just closure.`,
   };
 
-  return `You are ${COMPANY.salesPerson}, a sales representative at ${COMPANY.name}, a ${COMPANY.description}.
+  return `You are ${COMPANY.salesPerson}, sales at ${COMPANY.name} — ${COMPANY.description}.
 
-Write a cold outreach email to a potential B2B customer.
+Our actual capabilities (be specific, pick ONE relevant to this company):
+- MOQ 300 pieces/style, 15-day sample turnaround
+- Specialties: activewear (compression, moisture-wicking), streetwear, athleisure, OEM/ODM
+- Fabric certifications: OEKO-TEX, GRS recycled, UPF50+ performance
+- FOB Guangzhou, typical $8-22/pc depending on complexity
+- Current clients include US fitness brands and European outdoor retailers
+- We can match any reference sample within 3 revisions
 
-ABOUT THE RECIPIENT:
+RECIPIENT:
 Company: ${ctx.company_name}
-Contact: ${ctx.contact_name || 'Unknown'}
+Contact: ${ctx.contact_name || '(name unknown)'}${ctx.contact_role ? ` — ${ctx.contact_role}` : ''}
 Website: ${ctx.website || 'N/A'}
-Products they sell: ${ctx.product_categories?.join(', ') || 'apparel (specific categories unknown)'}
-Company type: ${ctx.company_type || 'Unknown'}
-Scale: ${ctx.scale_estimate || 'Unknown'}
+Products: ${ctx.product_categories?.join(', ') || 'apparel'}
+Company type: ${ctx.company_type || 'unknown'}, Scale: ${ctx.scale_estimate || 'unknown'}
 ${tradeInfo}
+${personalizationBlock}
 ${prevContext}
 
-EMAIL TYPE: ${ctx.email_type} (step ${ctx.step_number} of the sequence)
+EMAIL TYPE: ${ctx.email_type.toUpperCase()} (step ${ctx.step_number})
 ${emailTypeInstructions[ctx.email_type]}
 
-STRICT RULES:
-- Write like a REAL person, not a corporation. Use "Hey [Name]" or "Hi [Name]", never "Dear Sir/Madam"
-- If contact name is unknown, skip the greeting name and start directly
-- Under 150 words. Short paragraphs. No bullet point lists.
-- Reference something SPECIFIC about their business (products, style, market position)
-- Mention ONE relevant capability of ours (not a laundry list)
-- No "I hope this email finds you well" or any corporate filler
-- No emojis
-- Sound like a 28-year-old who's been in the garment industry for 5 years
-- Each email must have a COMPLETELY different angle from previous ones
-- End with a low-commitment CTA (not "schedule a call", more like "worth a quick chat?" or "any interest?")
+NON-NEGOTIABLE RULES:
+1. Under 100 words for intro/follow-up, under 120 for value_add, under 40 for breakup
+2. ONE specific observation about their business (not generic "I like your brand")
+3. ONE capability match (not a list of 5 things we do)
+4. ONE question CTA (not "let's hop on a call", more like "would samples make sense?")
+5. No "I hope this finds you well", no "Dear Sir/Madam", no corporate language
+6. No emojis
+7. If no contact name: skip the salutation, start directly with the observation
+8. If you have personalization hooks: USE THEM — the first line must reference something specific
 
 Respond with a JSON object (no markdown, no code fences):
 {
-  "subject": string (short, intriguing, under 50 chars, no caps lock),
-  "body_text": string (the email body as plain text),
-  "body_html": string (same content wrapped in simple HTML paragraphs)
+  "subject": string (under 45 chars, lowercase, curiosity-inducing — NOT "Introducing JOJO Fashion"),
+  "body_text": string (plain text email body, no signatures — we add those separately),
+  "body_html": string (same wrapped in simple HTML paragraphs, no styling),
+  "angle_used": string (1-sentence description of the personalization angle used, for tracking)
 }`;
 }

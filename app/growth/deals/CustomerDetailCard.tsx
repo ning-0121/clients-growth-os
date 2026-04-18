@@ -42,14 +42,29 @@ interface StrategyBundle {
   };
 }
 
+interface EmailPreview {
+  subject: string;
+  body_text: string;
+  email_quality: string;
+  warnings: string[];
+}
+
 export default function CustomerDetailCard({ lead }: Props) {
   const [strategy, setStrategy] = useState<StrategyBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState<'analysis' | 'strategy' | 'email' | 'phone'>('analysis');
 
+  // Email preview state
+  const [emailPreview, setEmailPreview] = useState<EmailPreview | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [approvalMsg, setApprovalMsg] = useState('');
+
   const ai = lead.ai_analysis || {};
   const customs = lead.customs_summary || {};
+  const isHighValue = lead.category === 'A' || lead.category === 'B';
 
   async function loadStrategy() {
     if (strategy) return;
@@ -72,6 +87,62 @@ export default function CustomerDetailCard({ lead }: Props) {
       setError('AI 策略生成失败');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function generateEmail() {
+    setEmailLoading(true);
+    setEmailError('');
+    setApprovalMsg('');
+
+    try {
+      const res = await fetch('/api/leads/preview-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: lead.id, step_number: 1, email_type: 'intro' }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setEmailError(data.error);
+      } else {
+        setEmailPreview({
+          subject: data.email.subject,
+          body_text: data.email.body_text,
+          email_quality: data.lead.email_quality,
+          warnings: data.warnings || [],
+        });
+      }
+    } catch {
+      setEmailError('AI 邮件生成失败');
+    } finally {
+      setEmailLoading(false);
+    }
+  }
+
+  async function submitForApproval() {
+    if (!emailPreview) return;
+    setSubmitting(true);
+    setApprovalMsg('');
+    try {
+      const res = await fetch('/api/leads/submit-email-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: lead.id,
+          subject: emailPreview.subject,
+          body_text: emailPreview.body_text,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setApprovalMsg(`❌ ${data.error}`);
+      } else {
+        setApprovalMsg('✅ 已提交审批，管理员批准后自动发送');
+      }
+    } catch {
+      setApprovalMsg('❌ 提交失败');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -248,26 +319,122 @@ export default function CustomerDetailCard({ lead }: Props) {
         )}
 
         {activeSection === 'email' && (
-          <div>
-            <p className="text-xs text-gray-500 mb-3">AI 根据客户特征生成的个性化开发信，可直接复制使用</p>
-            {lead.next_recommended_action && (
-              <div className="bg-yellow-50 rounded-lg p-3 text-xs text-yellow-800 mb-3">
-                当前推荐：{lead.next_recommended_action}
-                {lead.next_action_reason && ` — ${lead.next_action_reason}`}
+          <div className="space-y-3">
+            {/* Contact info status */}
+            {!lead.contact_email && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-700 font-medium">❌ 暂无邮箱，无法发送开发信</p>
+                <p className="text-xs text-red-600 mt-1">建议通过 LinkedIn/IG 联系，或补充联系方式后再开发</p>
               </div>
             )}
-            <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700">
-              <p className="text-xs text-gray-400 mb-2">开发信会在 AI 策略生成后自动创建，也可通过开发信引擎自动发送。</p>
-              {lead.outreach_status === 'sequence_active' && (
-                <p className="text-green-600 text-xs font-medium">开发信序列已启动，系统自动发送中...</p>
-              )}
-              {lead.outreach_status === 'none' && lead.contact_email && (
-                <p className="text-amber-600 text-xs font-medium">有邮箱但尚未进入开发信序列，验证通过后自动启动。</p>
-              )}
-              {!lead.contact_email && (
-                <p className="text-red-500 text-xs">暂无邮箱，无法发送开发信。建议通过 LinkedIn/IG 联系。</p>
-              )}
-            </div>
+
+            {lead.contact_email && (
+              <>
+                <div className="flex items-center justify-between bg-gray-50 rounded p-2">
+                  <div className="text-xs">
+                    <span className="text-gray-500">收件人：</span>
+                    <span className="text-gray-900 font-medium">{lead.contact_name || '(未知)'}</span>
+                    <span className="text-gray-500 ml-2">&lt;{lead.contact_email}&gt;</span>
+                  </div>
+                  {isHighValue && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">
+                      {lead.category}级 · 需审批
+                    </span>
+                  )}
+                </div>
+
+                {/* Generate preview button */}
+                {!emailPreview && (
+                  <button
+                    onClick={generateEmail}
+                    disabled={emailLoading}
+                    className="w-full py-3 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
+                  >
+                    {emailLoading ? 'AI 正在生成个性化邮件...' : '✨ 生成 AI 开发信预览'}
+                  </button>
+                )}
+
+                {emailError && (
+                  <div className="bg-red-50 border border-red-200 rounded p-2">
+                    <p className="text-xs text-red-700">{emailError}</p>
+                  </div>
+                )}
+
+                {/* Preview content */}
+                {emailPreview && (
+                  <div className="space-y-3">
+                    {/* Warnings */}
+                    {emailPreview.warnings.length > 0 && (
+                      <div className="space-y-1">
+                        {emailPreview.warnings.map((w, i) => (
+                          <div key={i} className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                            {w}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Subject */}
+                    <div className="bg-white border border-indigo-200 rounded-lg overflow-hidden">
+                      <div className="bg-indigo-50 px-3 py-2 border-b border-indigo-100">
+                        <div className="flex gap-2">
+                          <span className="text-xs font-medium text-indigo-700">主题：</span>
+                          <span className="text-sm text-gray-900 font-medium flex-1">{emailPreview.subject}</span>
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+{emailPreview.body_text}
+                        </pre>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={generateEmail}
+                        disabled={emailLoading}
+                        className="flex-1 py-2 text-xs text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 disabled:opacity-50 font-medium"
+                      >
+                        {emailLoading ? '重新生成中...' : '🔄 换一版'}
+                      </button>
+                      {isHighValue ? (
+                        <button
+                          onClick={submitForApproval}
+                          disabled={submitting || emailPreview.email_quality === 'generic'}
+                          className="flex-1 py-2 text-xs text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
+                        >
+                          {submitting ? '提交中...' : '📋 提交审批'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={submitForApproval}
+                          disabled={submitting}
+                          className="flex-1 py-2 text-xs text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
+                        >
+                          {submitting ? '发送中...' : '📤 加入发送队列'}
+                        </button>
+                      )}
+                    </div>
+
+                    {approvalMsg && (
+                      <div className={`text-xs text-center py-2 rounded ${
+                        approvalMsg.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                      }`}>
+                        {approvalMsg}
+                      </div>
+                    )}
+
+                    {/* Explanation for A/B */}
+                    {isHighValue && (
+                      <p className="text-xs text-gray-500 text-center">
+                        💡 A/B级高价值客户邮件必须经管理员审批才能发出
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

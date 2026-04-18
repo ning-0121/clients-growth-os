@@ -2,7 +2,7 @@ import { requireAuth, getCurrentProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import GrowthNavbar from '@/components/GrowthNavbar';
-import DealsTabs from './DealsTabs';
+import DealsCategoryAndList from './DealsCategoryAndList';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,27 +131,8 @@ export default async function DealsPage() {
           <p className="text-sm text-gray-500 mt-1">客户开发与成交跟进 — 每个客户都有 AI 分析和开发策略</p>
         </div>
 
-        {/* Category summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <div className="bg-white rounded-lg p-3 border border-green-200 text-center">
-            <div className="text-xl font-bold text-green-600">{counts.A}</div>
-            <div className="text-xs text-gray-500">A级 · 高价值</div>
-          </div>
-          <div className="bg-white rounded-lg p-3 border border-blue-200 text-center">
-            <div className="text-xl font-bold text-blue-600">{counts.B}</div>
-            <div className="text-xs text-gray-500">B级 · 有潜力</div>
-          </div>
-          <div className="bg-white rounded-lg p-3 border border-amber-200 text-center">
-            <div className="text-xl font-bold text-amber-600">{counts.C}</div>
-            <div className="text-xs text-gray-500">C级 · 待开发</div>
-          </div>
-          <div className="bg-white rounded-lg p-3 border border-gray-200 text-center">
-            <div className="text-xl font-bold text-gray-500">{counts.D}</div>
-            <div className="text-xs text-gray-500">D级 · 待培育</div>
-          </div>
-        </div>
-
-        <DealsTabs
+        <DealsCategoryAndList
+          counts={counts}
           todayLeads={todayLeads}
           awaitingReply={awaitingReply}
           repliedLeads={repliedLeads}
