@@ -74,6 +74,7 @@ export default function GrowthNavbar() {
     { href: '/growth/outreach', label: '邮件开发', show: isSales },
     { href: '/growth/service', label: '客服中心', show: isSales },
     { href: '/growth/products', label: '新品发现', show: isSales },
+    { href: '/growth/supervisor', label: 'AI监工', show: isAdmin },
     { href: '/growth/analytics', label: '数据中心', show: isAdmin },
   ];
 

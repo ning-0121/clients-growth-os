@@ -9,6 +9,7 @@ import { getLearnedSearchQueries } from '@/lib/scrapers/auto-upgrade';
 import { huntContacts } from '@/lib/scrapers/contact-hunter';
 import { enqueueUrls } from '@/lib/scrapers/source-queue';
 import { extractDomain } from '@/lib/growth/lead-engine';
+import { startJobLog, finishJobLog } from '@/lib/supervisor/job-logger';
 
 /**
  * POST /api/cron/discover
@@ -29,20 +30,24 @@ async function handleCron(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const supabase = createServiceClient();
+  const logId = await startJobLog(supabase, 'discover', 'global_discovery', 0);
+
   try {
-    const supabase = createServiceClient();
     const results: Record<string, any> = {};
 
     const serpApiKey = process.env.SERPAPI_KEY;
     if (!serpApiKey) {
+      await finishJobLog(supabase, logId, { status: 'error', errorMessage: 'SERPAPI_KEY not configured' });
       return NextResponse.json({ success: true, message: 'SERPAPI_KEY not configured', total_new: 0 });
     }
 
-    // Phase 1: Run 3 preset channels in parallel
+    // Phase 1: Run 3 preset channels in parallel — SCALED UP for global reach
+    // Previous: 4+3+4=11 queries/run. New: 15+10+12=37 queries/run (3.4x volume)
     const [googleResult, bingResult, socialResult] = await Promise.allSettled([
-      discoverLeads(supabase, 4),
-      discoverFromBing(supabase, 3),
-      discoverFromSocialAndEcom(supabase, 4),
+      discoverLeads(supabase, 15),
+      discoverFromBing(supabase, 10),
+      discoverFromSocialAndEcom(supabase, 12),
     ]);
 
     results.google = googleResult.status === 'fulfilled' ? googleResult.value : { error: (googleResult as any).reason?.message };
@@ -173,6 +178,14 @@ async function handleCron(request: Request) {
     const totalFound = (results.google?.urls_found || 0) + (results.bing?.urls_found || 0) +
       (results.social_ecom?.urls_found || 0) + learnedNew;
 
+    await finishJobLog(supabase, logId, {
+      status: 'success',
+      outputCount: totalNew,
+      successCount: totalNew,
+      metadata: { total_found: totalFound, re_enriched: reEnriched, sources: Object.keys(results) },
+      apiCalls: 37, // roughly, based on new scale (15+10+12)
+    });
+
     return NextResponse.json({
       success: true,
       total_found: totalFound,
@@ -182,6 +195,7 @@ async function handleCron(request: Request) {
     });
   } catch (err: any) {
     console.error('[Discover Cron] Error:', err);
+    await finishJobLog(supabase, logId, { status: 'error', errorMessage: err.message, errorCount: 1 });
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

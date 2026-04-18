@@ -13,22 +13,41 @@ export interface DiscoveryResult {
 // ── Search Query Templates ──
 
 const CATEGORIES = [
-  'activewear brand',
-  'sportswear brand',
-  'athletic clothing brand',
-  'fitness apparel brand',
-  'yoga wear brand',
-  'athleisure brand',
-  'compression wear brand',
-  'gym clothing brand',
-  'performance apparel',
-  'outdoor sportswear',
+  // Activewear
+  'activewear brand', 'sportswear brand', 'athletic clothing brand',
+  'fitness apparel brand', 'yoga wear brand', 'athleisure brand',
+  'compression wear brand', 'gym clothing brand', 'performance apparel',
+  'outdoor sportswear', 'running apparel brand', 'cycling apparel brand',
+  'crossfit apparel brand', 'pilates wear brand', 'swimwear brand',
+  // Streetwear / fashion
+  'streetwear brand', 'urban apparel brand', 'workout clothing brand',
+  'loungewear brand', 'lifestyle apparel brand', 'basics clothing brand',
+  // Specialty
+  'organic cotton apparel', 'bamboo clothing brand', 'recycled apparel brand',
+  'sustainable fashion brand', 'ethical clothing brand',
+  'seamless activewear', 'high waist leggings brand',
+  'plus size activewear', 'maternity activewear',
+  'kids activewear brand', 'tennis apparel brand', 'golf apparel brand',
+  'hiking apparel brand', 'ski apparel brand', 'surf apparel brand',
+  'boxing apparel brand', 'martial arts apparel',
+  // B2B signals
+  'wholesale activewear supplier needed', 'private label fitness wear',
 ];
 
 const COUNTRIES = [
-  'USA', 'UK', 'Germany', 'Australia', 'Canada',
-  'France', 'Japan', 'South Korea', 'Netherlands', 'Sweden',
-  'Italy', 'Spain', 'Denmark', 'Norway', 'New Zealand',
+  // Tier 1 — primary markets
+  'USA', 'UK', 'Germany', 'Australia', 'Canada', 'France',
+  // Tier 2 — strong fashion economies
+  'Japan', 'South Korea', 'Netherlands', 'Sweden', 'Italy', 'Spain',
+  'Denmark', 'Norway', 'New Zealand', 'Switzerland', 'Austria', 'Belgium',
+  'Finland', 'Ireland', 'Portugal',
+  // Tier 3 — emerging + regional hubs
+  'Singapore', 'Hong Kong', 'Israel', 'UAE', 'Saudi Arabia',
+  'Brazil', 'Mexico', 'Chile', 'Argentina', 'Colombia',
+  'South Africa', 'Turkey', 'Poland', 'Czech Republic',
+  // Tier 4 — underserved high-potential
+  'Taiwan', 'Malaysia', 'Thailand', 'Philippines', 'Indonesia', 'Vietnam',
+  'India', 'Greece',
 ];
 
 const EXTRA_QUERIES = [
@@ -39,6 +58,24 @@ const EXTRA_QUERIES = [
   'emerging fitness brand',
   'DTC activewear brand',
   'sustainable sportswear brand',
+  // Buying intent signals
+  '"seeking supplier" activewear',
+  '"OEM manufacturer" fitness apparel',
+  '"need factory" sportswear',
+  '"small batch" activewear production',
+  // Recent launches
+  'just launched activewear brand',
+  'new fitness apparel company 2026',
+  '"we are a startup" activewear',
+  // Funding signals (Clay.com + kaymen99 research: funded brands need suppliers)
+  'activewear brand raised funding 2026',
+  'sportswear startup Series A',
+  'fitness apparel Kickstarter 2026',
+  'athleisure brand launched Shopify',
+  // Trade show / retail signals
+  'activewear trade show exhibitor 2026',
+  'fashion boutique wholesale activewear',
+  'independent fitness apparel retailer',
 ];
 
 // Domains to skip (not potential customers)
