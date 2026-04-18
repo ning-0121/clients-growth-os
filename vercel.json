@@ -9,6 +9,10 @@
       "schedule": "30 7 * * *"
     },
     {
+      "path": "/api/discovery/shopify",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/discovery/instagram-dork",
       "schedule": "45 */4 * * *"
     },

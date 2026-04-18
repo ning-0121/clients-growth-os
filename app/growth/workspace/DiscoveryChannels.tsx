@@ -16,6 +16,9 @@ interface ChannelResult {
   urls_queued?: number;
   duplicates?: number;
   sample?: any[];
+  shopify_confirmed?: number;
+  websites_resolved?: number;
+  emails_extracted?: number;
   error?: string;
 }
 
@@ -31,14 +34,24 @@ const CHANNELS = [
     best_for: '低 MOQ 小品牌',
   },
   {
+    key: 'shopify',
+    name: 'Shopify 独立站',
+    description: 'Google 反向找 Shopify 指纹店铺',
+    endpoint: '/api/discovery/shopify',
+    icon: '🛍️',
+    color: 'border-emerald-200 hover:border-emerald-400 bg-emerald-50',
+    estimate: '~40 秒 · 20 店/次',
+    best_for: 'DTC 独立品牌',
+  },
+  {
     key: 'amazon',
     name: 'Amazon',
-    description: 'FBA 服装卖家（需后续查独立站）',
+    description: 'FBA 卖家 + 自动解析独立站',
     endpoint: '/api/discovery/amazon',
     icon: '📦',
     color: 'border-orange-200 hover:border-orange-400 bg-orange-50',
-    estimate: '~45 秒 · 50 卖家/次',
-    best_for: 'Bestsellers 自有品牌',
+    estimate: '~55 秒 · 50 卖家/次',
+    best_for: '含 Shopify 反向查找',
   },
   {
     key: 'exhibitor',
@@ -85,8 +98,12 @@ export default function DiscoveryChannels() {
           urls_queued: data.urls_queued,
           duplicates: data.duplicates,
           sample: data.sample,
+          // Extra metrics for some channels
+          shopify_confirmed: data.shopify_confirmed,
+          websites_resolved: data.websites_resolved,
+          emails_extracted: data.emails_extracted,
           error: data.error || (!res.ok ? `HTTP ${res.status}` : undefined),
-        },
+        } as ChannelResult,
       }));
     } catch (e: any) {
       setResults((r) => ({
@@ -105,7 +122,7 @@ export default function DiscoveryChannels() {
         <a href="/growth/leads" className="text-xs text-indigo-600 hover:underline">查看瀑布流 →</a>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         {CHANNELS.map((ch) => {
           const r = results[ch.key];
           const running = busy === ch.key;
@@ -142,6 +159,9 @@ export default function DiscoveryChannels() {
                     <div className="p-1.5 bg-green-100 text-green-700 rounded">
                       ✅ 抓 {r.total_found || 0} · 入库 {r.urls_queued || 0}
                       {(r.duplicates ?? 0) > 0 && ` · 去重 ${r.duplicates}`}
+                      {(r.shopify_confirmed ?? 0) > 0 && ` · Shopify ${r.shopify_confirmed}`}
+                      {(r.websites_resolved ?? 0) > 0 && ` · 解析 ${r.websites_resolved}`}
+                      {(r.emails_extracted ?? 0) > 0 && ` · 邮箱 ${r.emails_extracted}`}
                     </div>
                   )}
                   {r.sample && r.sample.length > 0 && !r.error && (

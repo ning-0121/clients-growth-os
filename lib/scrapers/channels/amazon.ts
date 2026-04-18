@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { runSync } from '../apify-client';
 import { enqueueUrls } from '../source-queue';
 import { extractDomain } from '@/lib/growth/lead-engine';
+import { resolveWebsiteFromBrandName } from './shopify-finder';
 
 /**
  * Amazon seller discovery via Apify actor `junglee/amazon-seller-scraper`.
@@ -33,7 +34,9 @@ export interface AmazonDiscoveryResult {
   duplicates: number;
   brands_with_business_name: number;
   brands_with_phone: number;
-  sample: Array<{ brand: string; business_name?: string; country?: string }>;
+  websites_resolved: number;
+  shopify_confirmed: number;
+  sample: Array<{ brand: string; business_name?: string; country?: string; website?: string }>;
   error?: string;
 }
 
@@ -47,15 +50,17 @@ const APPAREL_BESTSELLER_URLS = [
 
 export async function discoverFromAmazon(
   supabase: SupabaseClient,
-  opts: { maxSellers?: number; bestsellerUrl?: string; keyword?: string } = {}
+  opts: { maxSellers?: number; bestsellerUrl?: string; keyword?: string; resolveWebsites?: boolean; maxResolveCount?: number } = {}
 ): Promise<AmazonDiscoveryResult> {
-  const { maxSellers = 50, bestsellerUrl, keyword } = opts;
+  const { maxSellers = 50, bestsellerUrl, keyword, resolveWebsites = true, maxResolveCount = 10 } = opts;
   const result: AmazonDiscoveryResult = {
     total_found: 0,
     urls_queued: 0,
     duplicates: 0,
     brands_with_business_name: 0,
     brands_with_phone: 0,
+    websites_resolved: 0,
+    shopify_confirmed: 0,
     sample: [],
   };
 
@@ -77,6 +82,7 @@ export async function discoverFromAmazon(
     // If that fails, we still have business_name for manual outreach.
 
     const queueItems: { url: string; source: string; priority: number; data: any }[] = [];
+    let resolveBudget = maxResolveCount;
 
     for (const seller of sellers) {
       const name = seller.business_name || seller.brand || seller.store_name;
@@ -85,14 +91,38 @@ export async function discoverFromAmazon(
       if (seller.business_name) result.brands_with_business_name++;
       if (seller.phone) result.brands_with_phone++;
 
-      // Amazon seller_url is not ideal as the seed URL (it's amazon.com)
-      // Better: use a synthetic URL that triggers SerpAPI lookup
-      // We'll put the seller_url but give priority to the search step
-      if (seller.seller_url) {
+      // Try to resolve business_name → real website (Shopify/independent site)
+      // Only for top N sellers to stay within Vercel timeout
+      let resolvedWebsite: string | undefined;
+      let isShopify = false;
+      let productCount: number | undefined;
+
+      if (resolveWebsites && resolveBudget > 0 && seller.business_name) {
+        try {
+          const resolved = await resolveWebsiteFromBrandName(seller.business_name);
+          if (resolved?.website) {
+            resolvedWebsite = resolved.website;
+            isShopify = !!resolved.is_shopify;
+            productCount = resolved.product_count;
+            result.websites_resolved++;
+            if (isShopify) result.shopify_confirmed++;
+          }
+        } catch {}
+        resolveBudget--;
+      }
+
+      // Priority: higher for resolved Shopify stores (highest quality leads)
+      let priority = 12;
+      if (isShopify) priority = 26;
+      else if (resolvedWebsite) priority = 20;
+
+      // Enqueue: prefer resolved independent website over amazon URL
+      const enqueueUrl = resolvedWebsite || seller.seller_url;
+      if (enqueueUrl) {
         queueItems.push({
-          url: seller.seller_url,
+          url: enqueueUrl,
           source: 'directory',
-          priority: 12,
+          priority,
           data: {
             amazon_business_name: seller.business_name,
             amazon_brand: seller.brand,
@@ -102,8 +132,11 @@ export async function discoverFromAmazon(
             amazon_address: seller.address,
             amazon_country: seller.country,
             amazon_rating: seller.rating,
-            channel: 'amazon',
-            needs_website_lookup: true, // flag: pipeline should search for their real website
+            amazon_url: seller.seller_url,
+            channel: resolvedWebsite ? 'amazon+shopify' : 'amazon',
+            shopify_verified: isShopify,
+            product_count: productCount,
+            needs_website_lookup: !resolvedWebsite, // still flag if we haven't resolved
           },
         });
       }
@@ -115,10 +148,12 @@ export async function discoverFromAmazon(
       result.duplicates = duplicates;
     }
 
-    result.sample = sellers.slice(0, 5).map((s) => ({
-      brand: s.brand || s.store_name || '(unknown)',
-      business_name: s.business_name,
-      country: s.country,
+    // Build sample from queue items (so we show the resolved website)
+    result.sample = queueItems.slice(0, 5).map((q) => ({
+      brand: q.data.amazon_brand || q.data.amazon_store_name || q.data.amazon_business_name || '(unknown)',
+      business_name: q.data.amazon_business_name,
+      country: q.data.amazon_country,
+      website: q.url !== q.data.amazon_url ? q.url : undefined,
     }));
 
     try {
@@ -130,6 +165,8 @@ export async function discoverFromAmazon(
         metadata: {
           brands_with_business_name: result.brands_with_business_name,
           brands_with_phone: result.brands_with_phone,
+          websites_resolved: result.websites_resolved,
+          shopify_confirmed: result.shopify_confirmed,
         },
       });
     } catch {}
