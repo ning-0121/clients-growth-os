@@ -218,7 +218,12 @@ export async function processOutreachQueue(
     });
 
     if ('error' in sendResult) {
-      // Log failed email
+      if (sendResult.transient) {
+        // Rate limit / network error — leave campaign active, retry next cron run
+        result.failed++;
+        continue;
+      }
+      // Permanent send failure (bad address etc.) — log as bounced and pause
       await supabase.from('outreach_emails').insert({
         campaign_id: campaign.id,
         lead_id: campaign.lead_id,
@@ -228,13 +233,10 @@ export async function processOutreachQueue(
         to_email: lead.contact_email,
         status: 'bounced',
       });
-
-      // If bounced, pause the campaign
       await supabase
         .from('outreach_campaigns')
         .update({ status: 'bounced', updated_at: now })
         .eq('id', campaign.id);
-
       result.failed++;
       continue;
     }
@@ -319,12 +321,18 @@ export async function handleEmailEvent(
 
     case 'email.bounced':
       await supabase.from('outreach_emails').update({ status: 'bounced' }).eq('id', email.id);
-      await supabase.from('outreach_campaigns').update({ status: 'bounced', updated_at: now }).eq('id', email.campaign_id);
+      await supabase.from('outreach_campaigns')
+        .update({ status: 'bounced', updated_at: now })
+        .eq('id', email.campaign_id)
+        .eq('status', 'active');
       break;
 
     case 'email.complained':
       await supabase.from('outreach_emails').update({ status: 'complained' }).eq('id', email.id);
-      await supabase.from('outreach_campaigns').update({ status: 'unsubscribed', updated_at: now }).eq('id', email.campaign_id);
+      await supabase.from('outreach_campaigns')
+        .update({ status: 'unsubscribed', updated_at: now })
+        .eq('id', email.campaign_id)
+        .eq('status', 'active');
       await supabase.from('growth_leads').update({ outreach_status: 'opted_out' }).eq('id', email.lead_id);
       break;
   }

@@ -27,7 +27,7 @@ export interface SendEmailParams {
  * Send a single email via Resend.
  * Returns the Resend message ID on success.
  */
-export async function sendEmail(params: SendEmailParams): Promise<{ id: string } | { error: string }> {
+export async function sendEmail(params: SendEmailParams): Promise<{ id: string } | { error: string; transient?: boolean }> {
   const resend = getResendClient();
   // Use Resend-verified subdomain for sending, reply-to goes to main domain (腾讯企业邮)
   const from = params.from || `${COMPANY.salesPerson} <${COMPANY.sendingEmail}>`;
@@ -43,11 +43,14 @@ export async function sendEmail(params: SendEmailParams): Promise<{ id: string }
     });
 
     if (error) {
-      return { error: error.message };
+      // Rate limit is transient — don't treat as bounce, retry next cron run
+      const isRateLimit = error.name === 'rate_limit_exceeded' || error.message?.includes('rate limit');
+      return { error: error.message, transient: isRateLimit };
     }
 
     return { id: data?.id || '' };
   } catch (err: any) {
-    return { error: err.message || 'Failed to send email' };
+    // Network errors are transient
+    return { error: err.message || 'Failed to send email', transient: true };
   }
 }
