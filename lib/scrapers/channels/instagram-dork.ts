@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as cheerio from 'cheerio';
 import { enqueueUrls } from '../source-queue';
+import { enrichInstagramContact } from '../ig-contact-enricher';
 
 /**
  * Instagram brand discovery via SerpAPI Google dork.
@@ -42,9 +43,12 @@ export interface InstagramDorkResult {
   queries_run: number;
   profiles_found: number;
   emails_extracted: number;
+  whatsapp_found: number;
+  phones_found: number;
+  linktrees_scraped: number;
   urls_queued: number;
   duplicates: number;
-  sample: Array<{ profile: string; email?: string; snippet?: string }>;
+  sample: Array<{ profile: string; email?: string; snippet?: string; whatsapp?: string }>;
   error?: string;
 }
 
@@ -109,6 +113,9 @@ export async function discoverFromInstagramDork(
     queries_run: 0,
     profiles_found: 0,
     emails_extracted: 0,
+    whatsapp_found: 0,
+    phones_found: 0,
+    linktrees_scraped: 0,
     urls_queued: 0,
     duplicates: 0,
     sample: [],
@@ -156,14 +163,45 @@ export async function discoverFromInstagramDork(
 
         if (validEmail) result.emails_extracted++;
 
+        // Deep enrich: bio re-scan + Linktree + website → phone/WhatsApp/more emails.
+        // Best-effort; proceeds to enqueue even if enrichment fails.
+        let enrichment: Awaited<ReturnType<typeof enrichInstagramContact>> | null = null;
+        try {
+          enrichment = await enrichInstagramContact(handle);
+          if (enrichment.whatsapp_numbers.length > 0) result.whatsapp_found++;
+          if (enrichment.phones.length > 0) result.phones_found++;
+          if (enrichment.linktree_url) result.linktrees_scraped++;
+        } catch {}
+
+        const allEmails = Array.from(new Set([
+          ...(validEmail ? [validEmail] : []),
+          ...(enrichment?.emails || []),
+        ]));
+        const bestEmail = allEmails.find(e => !/^(info|hello|contact|support)@/.test(e)) || allEmails[0] || validEmail;
+        const waNumber = enrichment?.whatsapp_numbers[0];
+
+        // Priority: huge boost if personal email OR WhatsApp found (both are high-convert channels)
+        let priority = 18;
+        if (bestEmail && !/^(info|hello|contact|support)@/.test(bestEmail)) priority = 35;
+        else if (bestEmail) priority = 28;
+        if (waNumber) priority += 5;
+
         // Build queue entry — IG handle URL + metadata
         queueItems.push({
           url: `https://instagram.com/${handle}`,
           source: 'instagram',
-          priority: validEmail ? 30 : 18, // Huge bump if email already extracted
+          priority,
           data: {
             instagram_handle: handle,
-            pre_fetched_email: validEmail,
+            pre_fetched_email: bestEmail,
+            pre_fetched_emails_all: allEmails,
+            pre_fetched_phone: enrichment?.phones[0],
+            pre_fetched_whatsapp: waNumber,
+            whatsapp_link: enrichment?.whatsapp_links[0],
+            linktree_url: enrichment?.linktree_url,
+            linktree_links: enrichment?.linktree_links,
+            external_url: enrichment?.external_url,
+            bio_text: enrichment?.bio_text,
             snippet_preview: snippet.slice(0, 300),
             dork_query: query,
             channel: 'instagram_dork',
@@ -174,7 +212,8 @@ export async function discoverFromInstagramDork(
         if (result.sample.length < 5) {
           result.sample.push({
             profile: `@${handle}`,
-            email: validEmail,
+            email: bestEmail,
+            whatsapp: waNumber,
             snippet: snippet.slice(0, 150),
           });
         }
@@ -199,7 +238,12 @@ export async function discoverFromInstagramDork(
       query_used: queries.join(' | '),
       urls_found: result.profiles_found,
       urls_new: result.urls_queued,
-      metadata: { emails_extracted: result.emails_extracted },
+      metadata: {
+        emails_extracted: result.emails_extracted,
+        whatsapp_found: result.whatsapp_found,
+        phones_found: result.phones_found,
+        linktrees_scraped: result.linktrees_scraped,
+      },
     });
   } catch {}
 

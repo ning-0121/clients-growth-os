@@ -197,14 +197,32 @@ async function handleCron(request: Request) {
         const source: LeadSource = (VALID_LEAD_SOURCES.includes(item.source as LeadSource))
           ? item.source as LeadSource : 'website';
 
+        // Pull pre-fetched contact data captured at discovery time (IG enricher, Faire, etc.)
+        const preFetched = item.target_data || {};
+        const preFetchedEmail = preFetched.pre_fetched_email;
+        const preFetchedIgHandle = preFetched.instagram_handle;
+
         const lead: RawLeadInput = {
           company_name: result.company_name,
           source,
           website: cleanedUrl,
-          contact_email: result.contact_email || undefined,
-          instagram_handle: result.instagram_handle || undefined,
+          contact_email: result.contact_email || preFetchedEmail || undefined,
+          instagram_handle: result.instagram_handle || preFetchedIgHandle || undefined,
           contact_linkedin: result.contact_linkedin || undefined,
           product_match: result.product_match || undefined,
+          // Preserve all high-value contact vectors for downstream outreach
+          ai_analysis: (preFetched.pre_fetched_whatsapp || preFetched.pre_fetched_phone || preFetched.linktree_url || preFetched.bio_text) ? {
+            ig_contacts: {
+              whatsapp: preFetched.pre_fetched_whatsapp,
+              whatsapp_link: preFetched.whatsapp_link,
+              phone: preFetched.pre_fetched_phone,
+              linktree_url: preFetched.linktree_url,
+              linktree_links: preFetched.linktree_links,
+              external_url: preFetched.external_url,
+              bio_text: preFetched.bio_text,
+              all_emails: preFetched.pre_fetched_emails_all,
+            },
+          } : null,
         };
 
         const pipelineResult = await runIntakePipeline([lead], 'auto_scrape', systemUserId, supabase as any);
