@@ -1,5 +1,6 @@
 import { analyzeStructured } from '@/lib/ai/ai-service';
 import { buildColdEmailPrompt, ColdEmailContext, EmailType } from '@/lib/ai/prompts';
+import { fetchInstagramIntel, formatIgIntelForPrompt } from './ig-intel';
 
 export interface GeneratedEmail {
   subject: string;
@@ -91,6 +92,16 @@ export async function generateColdEmail(
   const aiAnalysis = lead.ai_analysis || {};
   const hooks = extractPersonalizationHooks(lead);
 
+  // ── Instagram intel: if this lead has an IG handle, pull recent posts so
+  // the AI can reference a specific post instead of generic pleasantries. ──
+  let igIntelBlock = '';
+  if (lead.instagram_handle) {
+    try {
+      const intel = await fetchInstagramIntel(lead.instagram_handle, { maxPosts: 4 });
+      igIntelBlock = formatIgIntelForPrompt(intel);
+    } catch {}
+  }
+
   // ── Extract the pre-generated strategy if it exists ──
   // Strategy is saved by /api/ai/customer-strategy into ai_analysis.outreach_strategy
   const strategyBundle = aiAnalysis.outreach_strategy || null;
@@ -121,6 +132,8 @@ export async function generateColdEmail(
     email_type: emailType,
     previous_subjects: previousSubjects,
     previous_angles: previousAngles,
+    ig_handle: lead.instagram_handle || undefined,
+    ig_intel_block: igIntelBlock || undefined,
   };
 
   try {

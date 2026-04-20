@@ -223,6 +223,10 @@ export interface ColdEmailContext {
   email_type: EmailType;
   previous_subjects?: string[];
   previous_angles?: string[];         // what hooks were already used
+
+  // ── Instagram-specific intel (populated for IG-sourced leads) ──
+  ig_intel_block?: string;            // pre-rendered intel block (from formatIgIntelForPrompt)
+  ig_handle?: string;                 // @handle — signals IG-native tone
 }
 
 /**
@@ -309,20 +313,23 @@ Company type: ${ctx.company_type || 'unknown'}, Scale: ${ctx.scale_estimate || '
 ${tradeInfo}
 ${personalizationBlock}
 ${strategyBlock}
+${ctx.ig_intel_block || ''}
 ${prevContext}
 
 EMAIL TYPE: ${ctx.email_type.toUpperCase()} (step ${ctx.step_number})
 ${emailTypeInstructions[ctx.email_type]}
+${ctx.ig_handle ? `\nTHIS IS AN INSTAGRAM-SOURCED BRAND. The founder personally reads their @${ctx.ig_handle} DMs — match that casual, peer-to-peer tone. Never sign off "Regards" or "Best regards". Sign off with just your first name, lowercase.` : ''}
 
 NON-NEGOTIABLE RULES:
 1. Under 100 words for intro/follow-up, under 120 for value_add, under 40 for breakup
-2. If a STRATEGY BLOCK is present → execute the "FIRST-TOUCH ANGLE" + weave in one talking point. Do NOT improvise your own angle.
-3. If no strategy → ONE specific observation from research (not generic "I like your brand")
-4. ONE capability match tied to their strategy's recommended products (not a generic list)
-5. ONE question CTA (not "let's hop on a call", more like "would samples make sense?")
-6. No "I hope this finds you well", no "Dear Sir/Madam", no corporate language
-7. No emojis
-8. If no contact name: skip the salutation, start directly with the observation
+2. If an INSTAGRAM INTEL block is present → the first sentence MUST reference a specific post listed. No exceptions.
+3. If a STRATEGY BLOCK is present → execute the "FIRST-TOUCH ANGLE" + weave in one talking point. Do NOT improvise your own angle.
+4. If no strategy and no IG intel → ONE specific observation from research (not generic "I like your brand")
+5. ONE capability match tied to their strategy's recommended products (not a generic list)
+6. ONE question CTA (not "let's hop on a call", more like "would samples make sense?")
+7. No "I hope this finds you well", no "Dear Sir/Madam", no corporate language
+8. No emojis
+9. If no contact name: skip the salutation, start directly with the observation
 
 Respond with a JSON object (no markdown, no code fences):
 {
