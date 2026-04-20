@@ -15,9 +15,8 @@ export async function POST(request: Request) { return handleRequest(request); }
 async function handleRequest(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  const vercelCron = request.headers.get('x-vercel-cron');
 
-  if (!vercelCron && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

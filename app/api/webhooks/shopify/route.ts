@@ -30,14 +30,19 @@ export async function POST(request: Request) {
   try {
     const rawBody = await request.text();
 
-    // Validate Shopify HMAC signature
+    // Validate Shopify HMAC signature — always required to prevent spoofed submissions
     const hmac = request.headers.get('x-shopify-hmac-sha256');
     const shopifySecret = process.env.SHOPIFY_WEBHOOK_SECRET;
-    if (shopifySecret && hmac) {
-      const valid = await verifyShopifyHmac(rawBody, hmac, shopifySecret);
-      if (!valid) {
-        return NextResponse.json({ error: '签名验证失败' }, { status: 401 });
-      }
+    if (!shopifySecret) {
+      console.error('[Shopify Webhook] SHOPIFY_WEBHOOK_SECRET not set — rejecting all requests');
+      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 503 });
+    }
+    if (!hmac) {
+      return NextResponse.json({ error: '缺少签名' }, { status: 401 });
+    }
+    const valid = await verifyShopifyHmac(rawBody, hmac, shopifySecret);
+    if (!valid) {
+      return NextResponse.json({ error: '签名验证失败' }, { status: 401 });
     }
 
     const body = JSON.parse(rawBody);

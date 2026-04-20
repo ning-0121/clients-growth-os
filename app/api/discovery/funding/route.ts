@@ -10,8 +10,7 @@ export async function POST(request: Request) { return handle(request); }
 async function handle(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  const vercelCron = request.headers.get('x-vercel-cron');
-  const isCron = vercelCron || (cronSecret && authHeader === `Bearer ${cronSecret}`);
+  const isCron = Boolean(cronSecret && authHeader === `Bearer ${cronSecret}`);
 
   if (!isCron) {
     await requireAuth();

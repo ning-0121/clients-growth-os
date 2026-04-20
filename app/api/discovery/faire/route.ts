@@ -17,8 +17,7 @@ async function handle(request: Request) {
   // Allow cron calls with bearer token, else require admin
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  const vercelCron = request.headers.get('x-vercel-cron');
-  const isCron = vercelCron || (cronSecret && authHeader === `Bearer ${cronSecret}`);
+  const isCron = Boolean(cronSecret && authHeader === `Bearer ${cronSecret}`);
 
   if (!isCron) {
     await requireAuth();
