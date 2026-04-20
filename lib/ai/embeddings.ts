@@ -17,7 +17,10 @@ const EMBEDDING_DIM = 1536;
 
 export async function generateEmbedding(text: string): Promise<number[] | null> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn('[Embeddings] OPENAI_API_KEY not set — RAG disabled, AI classification accuracy reduced ~20%');
+    return null;
+  }
   if (!text || text.length < 10) return null;
 
   try {
