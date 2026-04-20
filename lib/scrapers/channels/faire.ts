@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { runSync } from '../apify-client';
 import { enqueueUrls } from '../source-queue';
 import { extractDomain } from '@/lib/growth/lead-engine';
+import { smartSearch } from '../search-providers';
 
 /**
  * Faire.com brand discovery via Apify actor `devcake/faire-data-scraper`.
@@ -83,6 +84,11 @@ export async function discoverFromFaire(
   };
 
   const targetCategories = categoryUrl ? [categoryUrl] : APPAREL_CATEGORY_URLS.slice(0, 2);
+
+  // If Apify key not configured, fall back to search-based discovery
+  if (!process.env.APIFY_API_KEY) {
+    return discoverFromFaireFallback(supabase, targetCategories);
+  }
 
   try {
     // Run Apify actor — it accepts category URLs as input
@@ -174,4 +180,103 @@ export async function discoverFromFaire(
     result.error = err.message;
     return result;
   }
+}
+
+// Search-based fallback when APIFY_API_KEY is not configured.
+// Uses smartSearch (Brave/DataForSEO/SerpAPI) to find faire.com/brand/* URLs,
+// then fetches each page to extract the brand's external website.
+// Yields fewer brands than Apify (~10-20/run vs 50) but costs nothing extra.
+async function discoverFromFaireFallback(
+  supabase: SupabaseClient,
+  targetCategories: string[]
+): Promise<FaireDiscoveryResult> {
+  const result: FaireDiscoveryResult = {
+    total_found: 0, urls_queued: 0, duplicates: 0,
+    brands_with_email: 0, brands_with_ig: 0, sample: [],
+  };
+
+  const FAIRE_SEARCH_QUERIES = [
+    'site:faire.com/brand activewear yoga sportswear',
+    'site:faire.com/brand gym clothing workout apparel',
+    'site:faire.com/brand running apparel athletic wear',
+  ];
+
+  const brandUrls = new Set<string>();
+
+  for (const q of FAIRE_SEARCH_QUERIES.slice(0, 2)) {
+    const results = await smartSearch(q, { maxResults: 10 });
+    for (const r of results) {
+      if (r.url.includes('faire.com/brand/')) {
+        try {
+          const u = new URL(r.url);
+          // Normalize to brand root: faire.com/brand/slug
+          const parts = u.pathname.split('/').filter(Boolean);
+          if (parts[0] === 'brand' && parts[1]) {
+            brandUrls.add(`https://www.faire.com/brand/${parts[1]}`);
+          }
+        } catch {}
+      }
+    }
+  }
+
+  result.total_found = brandUrls.size;
+  if (brandUrls.size === 0) return result;
+
+  const queueItems: { url: string; source: string; priority: number; data: any }[] = [];
+
+  for (const brandPageUrl of brandUrls) {
+    try {
+      const res = await fetch(brandPageUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+
+      // Extract brand website — Faire pages typically have og:url or a canonical link to the brand site
+      const websiteMatch = html.match(/["']https?:\/\/(?!(?:www\.)?faire\.com)[^"'\s>]{5,}["']/);
+      const brandNameMatch = html.match(/<title>([^<]+)<\/title>/);
+      const brandName = brandNameMatch?.[1]?.replace(/ on Faire$/, '').trim() || brandPageUrl;
+
+      let website: string | null = null;
+      if (websiteMatch) {
+        const raw = websiteMatch[0].replace(/["']/g, '');
+        const domain = extractDomain(raw);
+        if (domain && !SKIP_DOMAINS.some(d => domain.includes(d))) {
+          website = `https://${domain}`;
+        }
+      }
+
+      if (website) {
+        queueItems.push({
+          url: website,
+          source: 'directory',
+          priority: 15,
+          data: { faire_brand: brandName, channel: 'faire', via: 'search_fallback' },
+        });
+      }
+    } catch {}
+  }
+
+  if (queueItems.length > 0) {
+    const { queued, duplicates } = await enqueueUrls(queueItems, supabase);
+    result.urls_queued = queued;
+    result.duplicates = duplicates;
+  }
+
+  result.sample = queueItems.slice(0, 5).map(i => ({
+    brand: i.data.faire_brand, website: i.url,
+  }));
+
+  try {
+    await supabase.from('discovery_runs').insert({
+      source: 'faire',
+      query_used: 'search_fallback (no APIFY_API_KEY)',
+      urls_found: result.total_found,
+      urls_new: result.urls_queued,
+      metadata: { via: 'search_fallback' },
+    });
+  } catch {}
+
+  return result;
 }

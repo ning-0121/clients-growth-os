@@ -26,6 +26,7 @@ export interface AIRequestOptions {
   model?: string; // override default model
   systemPrompt?: string;     // stable, will be prompt-cached by Anthropic (90% discount on hits)
   useCache?: boolean;        // default true — set false for non-deterministic debugging
+  maxTokens?: number;        // max output tokens (default: 1024 — override for large JSON responses)
 }
 
 export interface AIUsageRecord {

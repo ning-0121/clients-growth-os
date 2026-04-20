@@ -184,7 +184,7 @@ ${r.raw_website_text?.slice(0, 2000) || '无'}
       prompt,
       'customer_strategy',
       validateStrategyBundle,
-      { leadId: lead.id }
+      { leadId: lead.id, maxTokens: 4096 }
     );
   } catch (err) {
     console.error(`[Strategy] Failed for ${lead.company_name}:`, err);
