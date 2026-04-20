@@ -152,9 +152,43 @@ async function handleCron(request: Request) {
       });
     }
 
-    // Insert alerts
+    // Insert alerts — but dedupe: don't create same alert_type in last 12h if unresolved
     if (alerts.length > 0) {
-      await supabase.from('supervisor_alerts').insert(alerts);
+      const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
+      const typesToSuppress = new Set<string>();
+
+      for (const alert of alerts) {
+        const { data: recent } = await supabase
+          .from('supervisor_alerts')
+          .select('id')
+          .eq('alert_type', alert.alert_type)
+          .is('resolved_at', null)
+          .gte('detected_at', twelveHoursAgo)
+          .limit(1);
+        if (recent && recent.length > 0) {
+          typesToSuppress.add(alert.alert_type);
+        }
+      }
+
+      const fresh = alerts.filter((a) => !typesToSuppress.has(a.alert_type));
+      if (fresh.length > 0) {
+        await supabase.from('supervisor_alerts').insert(fresh);
+      }
+    }
+
+    // Auto-resolve alerts when condition clears
+    // E.g. if we now have leads, resolve old "low_throughput" alerts
+    if ((threeHourLeads || 0) > 0) {
+      await supabase.from('supervisor_alerts')
+        .update({ resolved_at: now.toISOString() })
+        .eq('alert_type', 'low_throughput')
+        .is('resolved_at', null);
+    }
+    if ((pendingApprovalsRes.count || 0) <= 10) {
+      await supabase.from('supervisor_alerts')
+        .update({ resolved_at: now.toISOString() })
+        .eq('alert_type', 'approvals_backlog')
+        .is('resolved_at', null);
     }
 
     return NextResponse.json({
