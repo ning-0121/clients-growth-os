@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { executeSocialEngagements } from '@/lib/social/phantombuster-executor';
+import { getWarmupCaps } from '@/lib/social/warmup';
 
 /**
  * POST /api/cron/social-execute
@@ -22,8 +23,14 @@ async function handleCron(request: Request) {
   const supabase = createServiceClient();
 
   try {
-    const summary = await executeSocialEngagements(supabase, { batchSize: 10 });
-    return NextResponse.json({ success: true, ...summary });
+    // Cron runs 3x/day, so per-run cap = daily cap / 3 (rounded up).
+    // Safety net in case planner was bypassed / manually seeded.
+    const caps = getWarmupCaps();
+    const dailyMax = Math.max(caps.ig_comments, caps.ig_dms, caps.linkedin_connects);
+    const batchSize = Math.max(1, Math.ceil(dailyMax / 3));
+
+    const summary = await executeSocialEngagements(supabase, { batchSize });
+    return NextResponse.json({ success: true, warmup: caps, batch_size: batchSize, ...summary });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { planEngagements } from '@/lib/social/engagement-planner';
+import { getWarmupCaps } from '@/lib/social/warmup';
 
 /**
  * POST /api/cron/social-engage
@@ -22,8 +23,9 @@ async function handleCron(request: Request) {
   try {
     const supabase = createServiceClient();
 
-    // Plan engagements (max 10 IG comments, 20 LinkedIn connections per day)
-    const planned = await planEngagements(supabase, 10, 20);
+    // Apply warm-up caps for new phantom accounts (ramps 20% → 100% over 14 days)
+    const caps = getWarmupCaps();
+    const planned = await planEngagements(supabase, caps.ig_comments, caps.linkedin_connects);
 
     // Store as queued engagements
     if (planned.length > 0) {
@@ -48,6 +50,7 @@ async function handleCron(request: Request) {
       planned: planned.length,
       instagram: planned.filter((p) => p.platform === 'instagram').length,
       linkedin: planned.filter((p) => p.platform === 'linkedin').length,
+      warmup: caps,
     });
   } catch (err: any) {
     console.error('[Social Engage Cron] Error:', err);
