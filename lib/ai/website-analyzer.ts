@@ -1,5 +1,5 @@
 import { analyzeStructured } from './ai-service';
-import { buildWebsiteAnalysisPrompt, WebsiteContent } from './prompts';
+import { buildWebsiteAnalysisPrompt, WEBSITE_ANALYSIS_SYSTEM_PROMPT, WebsiteContent } from './prompts';
 import { AIWebsiteAnalysis } from './types';
 
 /**
@@ -57,7 +57,13 @@ export async function analyzeWebsite(
       prompt,
       'website_analysis',
       validateAnalysis,
-      { leadId }
+      {
+        leadId,
+        // ── Anthropic Prompt Caching ──
+        // System prompt is ~2000 tokens (few-shot examples included).
+        // After the first call in any 5-min window, subsequent calls pay only 10% on system tokens.
+        systemPrompt: WEBSITE_ANALYSIS_SYSTEM_PROMPT,
+      }
     );
   } catch (err) {
     console.warn(`[AI] Website analysis failed for ${content.url}:`, err);

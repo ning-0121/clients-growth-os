@@ -144,6 +144,40 @@ export async function GET() {
       setup_url: 'https://github.com/settings/tokens',
     },
 
+    // ── 新：搜索 provider 替代 ──
+    {
+      key: 'BRAVE_SEARCH_API_KEY',
+      required: false,
+      configured: !!process.env.BRAVE_SEARCH_API_KEY,
+      capability: 'Brave Search API（独立索引，免费2000/月，$5/mo Pro）',
+      impact: 'SerpAPI 主力降级为 fallback，月省 $40+',
+      setup_url: 'https://brave.com/search/api/',
+    },
+    {
+      key: 'DATAFORSEO_LOGIN',
+      required: false,
+      configured: !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
+      capability: 'DataForSEO SERP API（$0.6/1000 vs SerpAPI $10/1000）',
+      impact: '搜索成本降低 10-15x',
+      setup_url: 'https://app.dataforseo.com/',
+    },
+    {
+      key: 'SCRAPINGBEE_API_KEY',
+      required: false,
+      configured: !!process.env.SCRAPINGBEE_API_KEY,
+      capability: 'ScrapingBee unblocker（Amazon/LinkedIn Cloudflare 绕过）',
+      impact: '否则 Amazon 深度抓取 + LinkedIn 公开页抓取会失败',
+      setup_url: 'https://www.scrapingbee.com/',
+    },
+    {
+      key: 'OPENAI_API_KEY',
+      required: false,
+      configured: !!process.env.OPENAI_API_KEY,
+      capability: 'OpenAI Embeddings（pgvector RAG，$0.02/百万tokens）',
+      impact: '无 RAG 就没法用相似客户做 few-shot，分类精度降 20%',
+      setup_url: 'https://platform.openai.com/api-keys',
+    },
+
     // ── Config ──
     {
       key: 'SYSTEM_USER_ID',

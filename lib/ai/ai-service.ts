@@ -90,9 +90,25 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-5-20251001': { input: 0.8 / 1_000_000, output: 4 / 1_000_000 },
 };
 
-function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
+function estimateCost(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  cacheCreationTokens = 0,
+  cacheReadTokens = 0
+): number {
   const pricing = PRICING[model] || PRICING['claude-sonnet-4-20250514'];
-  return inputTokens * pricing.input + outputTokens * pricing.output;
+  // Anthropic pricing (2026):
+  //   Cache writes cost 1.25x input rate
+  //   Cache reads cost 0.10x input rate (90% discount)
+  const cacheWriteRate = pricing.input * 1.25;
+  const cacheReadRate = pricing.input * 0.1;
+  return (
+    inputTokens * pricing.input +
+    outputTokens * pricing.output +
+    cacheCreationTokens * cacheWriteRate +
+    cacheReadTokens * cacheReadRate
+  );
 }
 
 async function logUsage(record: AIUsageRecord) {
@@ -128,11 +144,15 @@ export async function analyzeWithAI(
 ): Promise<string> {
   const model = options?.model || DEFAULT_MODEL;
   const cacheTTL = options?.cacheTTL ?? DEFAULT_CACHE_TTL;
+  const systemPrompt = options?.systemPrompt;
+  const useCache = options?.useCache !== false;
 
-  // Check cache
-  const cacheKey = await hashKey(`${model}:${prompt}`);
-  const cached = getCached(cacheKey, cacheTTL);
-  if (cached) return cached;
+  // ── Local LRU cache (response-level — dedupes identical prompts) ──
+  const cacheKey = await hashKey(`${model}:${systemPrompt || ''}:${prompt}`);
+  if (useCache) {
+    const cached = getCached(cacheKey, cacheTTL);
+    if (cached) return cached;
+  }
 
   // Rate limit
   await acquireToken();
@@ -142,34 +162,57 @@ export async function analyzeWithAI(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const client = getAnthropicClient();
-      const response = await client.messages.create({
+
+      // ── Anthropic Prompt Caching (90% discount on cached tokens) ──
+      // Structure: system prompt is marked cacheable; user prompt stays fresh.
+      // Anthropic will cache the system block for 5 minutes.
+      // Minimum 1024 tokens required for caching.
+      const requestBody: any = {
         model,
         max_tokens: 1024,
         messages: [{ role: 'user', content: prompt }],
-      });
+      };
+
+      if (systemPrompt && systemPrompt.length > 500) {
+        // Only cache system prompts that are substantial (worth caching)
+        requestBody.system = [
+          {
+            type: 'text',
+            text: systemPrompt,
+            cache_control: { type: 'ephemeral' }, // 5-minute cache
+          },
+        ];
+      } else if (systemPrompt) {
+        // Small system prompts — just send without cache header
+        requestBody.system = systemPrompt;
+      }
+
+      const response = await client.messages.create(requestBody);
 
       const text =
         response.content[0].type === 'text' ? response.content[0].text : '';
 
       // Cache the response
-      setCache(cacheKey, text);
+      if (useCache) setCache(cacheKey, text);
 
-      // Log usage
+      // Log usage — include cache tokens separately
       const inputTokens = response.usage.input_tokens;
       const outputTokens = response.usage.output_tokens;
+      const cacheCreationTokens = (response.usage as any).cache_creation_input_tokens || 0;
+      const cacheReadTokens = (response.usage as any).cache_read_input_tokens || 0;
+
       await logUsage({
         request_type: requestType,
         lead_id: options?.leadId,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
-        cost_usd: estimateCost(model, inputTokens, outputTokens),
+        cost_usd: estimateCost(model, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens),
       });
 
       return text;
     } catch (err: any) {
       lastError = err;
-      // Retry on rate limit (429) or overloaded (529)
       const status = err?.status || err?.statusCode;
       if ((status === 429 || status === 529) && attempt < MAX_RETRIES - 1) {
         const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);

@@ -14,14 +14,101 @@ export interface WebsiteContent {
   headings: string[]; // H1/H2 headings
 }
 
+/**
+ * Stable system prompt for website analysis — this gets prompt-cached by Anthropic.
+ * Keep this >1024 tokens so it qualifies for caching (include few-shot examples).
+ */
+export const WEBSITE_ANALYSIS_SYSTEM_PROMPT = `You are a senior B2B lead qualification analyst for ${COMPANY.name}, a ${COMPANY.description}.
+We produce: ${COMPANY.products.join(', ')}.
+Our MOQ: ${COMPANY.moq}. Typical lead time: ${COMPANY.leadTime}.
+
+Your job: analyze websites and determine if the company would be a good B2B customer for us to approach for manufacturing.
+
+## Scoring Framework
+
+### Company type classification:
+- **brand**: Owns a label, markets directly to consumers (DTC). These are our PRIMARY targets because they need manufacturing partners.
+- **retailer**: Sells other brands' products. Lower priority unless they do private label.
+- **manufacturer**: They are competitors, not customers. Mark product_fit_score=0.
+- **wholesaler**: Mid-chain. OK targets if they do private label for small brands.
+- **other**: Services/media/non-apparel. Mark product_fit_score=0.
+
+### Scale estimate signals:
+- **small** (best target): Indie brands, <20 products on site, no wholesale page, active on IG but <10k followers. These NEED factories.
+- **medium** (good target): Established brands with 50-200 SKUs, wholesale portal exists, 10k-100k IG followers. They have existing factories but always open to better.
+- **large** (low priority): >200 SKUs, retail presence in major stores, >100k followers. They lock in exclusivity with existing suppliers.
+
+### Product fit scoring (0-100):
+- 100: Direct match to our specialties (activewear, sportswear, custom apparel, OEM/ODM)
+- 70-90: Adjacent apparel categories we can produce (streetwear, athleisure, basics)
+- 40-60: Partially fits (some products match, others don't)
+- 0-30: Mismatch (luxury couture, denim specialists, footwear-only, accessories-only)
+- 0: Not an apparel company at all
+
+### Outreach recommendation format:
+1-2 sentences, concrete and specific. Reference one product they sell + one angle for our pitch.
+Good: "They just launched a spring yoga line — pitch our moisture-wicking fabric certification and 15-day sample turnaround."
+Bad: "This is a good fit for our services, we should reach out."
+
+## Few-Shot Examples
+
+### Example 1 — Strong target
+Input: DTC brand selling women's athleisure, 35 products, IG 8.5k followers, no wholesale portal.
+Output:
+{
+  "is_apparel_company": true,
+  "confidence": 95,
+  "product_categories": ["athleisure", "yoga wear", "leggings"],
+  "company_type": "brand",
+  "scale_estimate": "small",
+  "product_fit_score": 92,
+  "outreach_recommendation": "Indie athleisure brand with 35 SKUs - ideal MOQ fit. Pitch our 300-pc minimums and GRS recycled fabric certification as sustainability angle.",
+  "key_evidence": ["35 products on homepage collection", "No wholesale or B2B page visible", "IG handle in footer with ~8k followers", "Founded 2023 in 'Our Story' page", "Uses Shopify platform"]
+}
+
+### Example 2 — Wrong fit (retailer of big brands)
+Input: Department store selling Nike/Adidas/Under Armour.
+Output:
+{
+  "is_apparel_company": true,
+  "confidence": 100,
+  "product_categories": ["activewear", "sneakers", "accessories"],
+  "company_type": "retailer",
+  "scale_estimate": "large",
+  "product_fit_score": 5,
+  "outreach_recommendation": "Pure retailer - sells Nike/Adidas/UA which have exclusive factory relationships. Skip unless they launch a private label line.",
+  "key_evidence": ["Brand portfolio page lists Nike, Adidas, Under Armour", "No own-brand products visible", "Checkout goes to Shopify Plus", "Has 12 physical locations"]
+}
+
+### Example 3 — Not apparel
+Input: Tech blog about fitness wearables.
+Output:
+{
+  "is_apparel_company": false,
+  "confidence": 98,
+  "product_categories": [],
+  "company_type": "other",
+  "scale_estimate": "small",
+  "product_fit_score": 0,
+  "outreach_recommendation": "Not an apparel company - media/blog site. Do not outreach.",
+  "key_evidence": ["Domain is a WordPress blog", "Articles review Apple Watch/Fitbit", "Monetizes via affiliate links", "No own products sold"]
+}
+
+## Response Rules
+- Respond with ONLY a JSON object (no markdown, no code fences, no prose before/after)
+- Match the exact schema above
+- If the website is unclear or low-quality, set confidence<60 and product_fit_score<50
+- Never fabricate evidence — only state facts present in the provided content`;
+
+/**
+ * Build the dynamic part of the website analysis prompt.
+ * Pair with WEBSITE_ANALYSIS_SYSTEM_PROMPT (cached) when calling analyzeStructured.
+ */
 export function buildWebsiteAnalysisPrompt(content: WebsiteContent): string {
   const nav = content.navItems.length > 0 ? `Navigation: ${content.navItems.join(', ')}` : '';
   const headings = content.headings.length > 0 ? `Headings: ${content.headings.join(', ')}` : '';
 
-  return `You are a B2B lead qualification analyst for ${COMPANY.name}, a ${COMPANY.description}.
-We produce: ${COMPANY.products.join(', ')}.
-
-Analyze this website and determine if this company would be a good B2B customer for us.
+  return `Analyze this website:
 
 URL: ${content.url}
 Title: ${content.title}
@@ -32,17 +119,7 @@ ${headings}
 Page Content (excerpt):
 ${content.bodyText.slice(0, 4000)}
 
-Respond with a JSON object (no markdown, no code fences, just raw JSON):
-{
-  "is_apparel_company": boolean,
-  "confidence": number (0-100, how confident you are in is_apparel_company),
-  "product_categories": string[] (specific categories like "activewear", "streetwear", "t-shirts", "hoodies", etc.),
-  "company_type": "brand" | "retailer" | "manufacturer" | "wholesaler" | "other",
-  "scale_estimate": "small" | "medium" | "large" (based on website signals: small=indie/startup, medium=established, large=major retailer/chain),
-  "product_fit_score": number (0-100, how well they match our manufacturing capabilities),
-  "outreach_recommendation": string (1-2 sentences: how should our sales team approach this company),
-  "key_evidence": string[] (3-5 key facts from the website that support your analysis)
-}`;
+Return JSON matching the schema defined in the system prompt.`;
 }
 
 export function buildCustomsMatchPrompt(

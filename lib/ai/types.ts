@@ -24,6 +24,8 @@ export interface AIRequestOptions {
   cacheTTL?: number; // cache TTL in ms (default: 24h)
   priority?: 'high' | 'normal' | 'low';
   model?: string; // override default model
+  systemPrompt?: string;     // stable, will be prompt-cached by Anthropic (90% discount on hits)
+  useCache?: boolean;        // default true — set false for non-deterministic debugging
 }
 
 export interface AIUsageRecord {

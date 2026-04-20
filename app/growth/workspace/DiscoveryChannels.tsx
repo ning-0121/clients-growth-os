@@ -73,6 +73,16 @@ const CHANNELS = [
     estimate: '~15 秒 · 30 profile/次',
     best_for: 'bio 已暴露邮箱',
   },
+  {
+    key: 'funding',
+    name: '融资监控',
+    description: 'Kickstarter + ProductHunt 新品牌',
+    endpoint: '/api/discovery/funding',
+    icon: '💰',
+    color: 'border-yellow-200 hover:border-yellow-400 bg-yellow-50',
+    estimate: '~40 秒 · 30-50/次',
+    best_for: '刚融资的高意向品牌',
+  },
 ] as const;
 
 export default function DiscoveryChannels() {
@@ -122,7 +132,7 @@ export default function DiscoveryChannels() {
         <a href="/growth/leads" className="text-xs text-indigo-600 hover:underline">查看瀑布流 →</a>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
         {CHANNELS.map((ch) => {
           const r = results[ch.key];
           const running = busy === ch.key;
