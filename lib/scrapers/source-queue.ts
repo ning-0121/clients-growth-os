@@ -50,7 +50,9 @@ export async function dequeueItems(
   batchSize: number,
   supabase: SupabaseClient
 ): Promise<any[]> {
-  // Get pending items ordered by priority (low = high priority) then age
+  // Get pending items ordered by priority (low = high priority) then age.
+  // We over-fetch slightly so concurrent workers stealing each other's
+  // picks still come away with useful work rather than an empty batch.
   const { data: items } = await supabase
     .from('lead_source_queue')
     .select('*')
@@ -61,15 +63,20 @@ export async function dequeueItems(
 
   if (!items || items.length === 0) return [];
 
-  // Mark as processing (optimistic lock)
+  // Atomically claim them: UPDATE ... WHERE status='pending' RETURNING *
+  // Only rows that were still pending at UPDATE time come back in `claimed`.
+  // This eliminates the race where two concurrent workers both fetch the
+  // same row and both end up processing it (duplicate AI calls / duplicate
+  // inserts). Worker that lost the race gets an empty slice for that row.
   const ids = items.map((i: any) => i.id);
-  await supabase
+  const { data: claimed } = await supabase
     .from('lead_source_queue')
     .update({ status: 'processing' })
     .in('id', ids)
-    .eq('status', 'pending'); // Only update if still pending
+    .eq('status', 'pending')
+    .select();
 
-  return items;
+  return claimed || [];
 }
 
 /**

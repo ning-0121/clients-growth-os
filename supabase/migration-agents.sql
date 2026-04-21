@@ -27,22 +27,10 @@ CREATE INDEX IF NOT EXISTS idx_agent_tasks_lead ON agent_tasks(lead_id);
 CREATE INDEX IF NOT EXISTS idx_agent_tasks_created ON agent_tasks(created_at DESC);
 
 -- ── Outreach Campaigns (开发活动) ──
-CREATE TABLE IF NOT EXISTS outreach_campaigns (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_id UUID NOT NULL REFERENCES growth_leads(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'cancelled')),
-  current_step INT DEFAULT 0,
-  total_steps INT DEFAULT 4,
-  strategy JSONB DEFAULT '{}',
-  last_sent_at TIMESTAMPTZ,
-  next_send_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_campaigns_lead ON outreach_campaigns(lead_id);
-CREATE INDEX IF NOT EXISTS idx_campaigns_status ON outreach_campaigns(status);
-CREATE INDEX IF NOT EXISTS idx_campaigns_next_send ON outreach_campaigns(next_send_at);
+-- NOTE: canonical definition is in migration-outreach.sql. Removed the
+-- duplicate CREATE TABLE here because the two versions had incompatible
+-- column sets (this one lacked sequence_id FK that the code requires).
+-- See migration-contact-enrichment.sql for the reconciling ALTERs.
 
 -- ── Outreach Emails (开发邮件) ──
 CREATE TABLE IF NOT EXISTS outreach_emails (

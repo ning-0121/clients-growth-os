@@ -128,10 +128,14 @@ export async function runVerificationPipeline(
           if (check.data?.contacts) updateData.contact_people = check.data.contacts;
         }
 
+        // Optimistic lock on the previous status prevents two concurrent
+        // verify-cron runs from both transitioning the same lead and
+        // double-charging AI. Second writer's update affects 0 rows.
         await supabase
           .from('growth_leads')
           .update(updateData)
-          .eq('id', lead.id);
+          .eq('id', lead.id)
+          .eq('verification_status', lead.verification_status);
         result.advanced++;
 
         // Auto-enroll in outreach when verification completes with 'pursue'
