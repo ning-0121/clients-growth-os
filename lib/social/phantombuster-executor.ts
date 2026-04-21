@@ -124,11 +124,11 @@ export async function executeSocialEngagements(
   for (const eng of queued) {
     const agentId = getAgentIdFor(eng.platform, eng.engagement_type);
     if (!agentId) {
+      // Leave as 'queued' — this is a configuration gap, not a content
+      // failure. Once the operator sets the agent ID env var, the next
+      // cron run will pick these up and launch them.
       summary.skipped_no_agent++;
-      await supabase.from('social_engagements')
-        .update({ status: 'failed' })
-        .eq('id', eng.id);
-      summary.errors.push(`No agent configured for ${eng.platform}/${eng.engagement_type}`);
+      summary.errors.push(`No agent configured for ${eng.platform}/${eng.engagement_type} — row left queued`);
       continue;
     }
 
