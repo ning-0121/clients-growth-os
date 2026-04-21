@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { runInboundPipeline } from '@/lib/agents';
 import { getAgent } from '@/lib/agents';
 
+export const maxDuration = 300;
+
 /**
  * GET /api/agents/inbound
  * Vercel Cron trigger — runs weekly social media content planning.

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { discoverLeads } from '@/lib/scrapers/google-discovery';
+
+export const maxDuration = 300;
 import { discoverFromBing } from '@/lib/scrapers/duckduckgo-discovery';
 import { discoverFromSocialAndEcom } from '@/lib/scrapers/social-ecom-discovery';
 import { learnFromWonDeals, expandSearchScope } from '@/lib/scrapers/search-intelligence';
@@ -81,7 +83,9 @@ async function handleCron(request: Request) {
           'trustpilot.com', 'nike.com', 'adidas.com', 'lululemon.com', 'gymshark.com',
           'shopify.com', 'wix.com', 'squarespace.com'];
 
-        for (const query of allLearnedQueries) {
+        // Cap at 8 queries/run — each is a paid SerpAPI call. Without a cap,
+        // self-evolution can generate hundreds of queries and blow the budget.
+        for (const query of allLearnedQueries.slice(0, 8)) {
           try {
             const url = `https://serpapi.com/search.json?api_key=${serpApiKey}&q=${encodeURIComponent(query)}&num=5&engine=google`;
             const res = await fetch(url);

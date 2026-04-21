@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { dequeueItems, markCompleted, markFailed } from '@/lib/scrapers/source-queue';
+
+// 10 items × ~3s fastEnrich + intake pipeline + AI classification can exceed
+// the default 60s. 300s is Vercel Pro's max for cron functions.
+export const maxDuration = 300;
 import { runIntakePipeline } from '@/lib/growth/intake-pipeline';
 import { RawLeadInput, LeadSource } from '@/lib/types';
 import * as cheerio from 'cheerio';

@@ -4,6 +4,9 @@ import { requireAuth, getCurrentProfile } from '@/lib/auth';
 import { discoverFromInstagramDork } from '@/lib/scrapers/channels/instagram-dork';
 import { startJobLog, finishJobLog } from '@/lib/supervisor/job-logger';
 
+// IG enrichment (Linktree + website deep scan) per profile adds time.
+export const maxDuration = 300;
+
 export async function GET(request: Request) { return handle(request); }
 export async function POST(request: Request) { return handle(request); }
 

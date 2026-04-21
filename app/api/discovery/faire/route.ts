@@ -4,6 +4,8 @@ import { requireAuth, getCurrentProfile } from '@/lib/auth';
 import { discoverFromFaire } from '@/lib/scrapers/channels/faire';
 import { startJobLog, finishJobLog } from '@/lib/supervisor/job-logger';
 
+export const maxDuration = 120;
+
 /**
  * POST /api/discovery/faire
  * Admin/manual trigger — discover brands from Faire.com

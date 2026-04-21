@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { runVerificationPipeline } from '@/lib/growth/verification-pipeline';
 
+// Up to 50 leads × 4 rounds × AI calls per round can run long.
+export const maxDuration = 300;
+
 /**
  * POST /api/leads/verify
  * Trigger the multi-round verification pipeline.

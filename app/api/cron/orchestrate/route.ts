@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { resetStuckItems, retryFailedItems, getQueueStats } from '@/lib/scrapers/source-queue';
 import { enrollLeadInSequence } from '@/lib/outreach/sequence-engine';
 
+export const maxDuration = 120;
+
 /**
  * POST /api/cron/orchestrate
  * Master orchestrator (every 30 min): ensures no leads get stuck between pipeline stages.

@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { runOutboundPipeline } from '@/lib/agents';
 import { generateDailySearchPlans } from '@/lib/config/search-keywords';
 
+export const maxDuration = 300;
+
 /**
  * GET /api/agents/outbound
  * Vercel Cron trigger — 按每日搜索计划轮换品类和地区搜索。

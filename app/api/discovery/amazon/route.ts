@@ -4,6 +4,8 @@ import { requireAuth, getCurrentProfile } from '@/lib/auth';
 import { discoverFromAmazon } from '@/lib/scrapers/channels/amazon';
 import { startJobLog, finishJobLog } from '@/lib/supervisor/job-logger';
 
+export const maxDuration = 120;
+
 export async function GET(request: Request) { return handle(request); }
 export async function POST(request: Request) { return handle(request); }
 

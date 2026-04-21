@@ -4,6 +4,8 @@ import { requireAuth, getCurrentProfile } from '@/lib/auth';
 import { discoverShopifyStores, resolveWebsiteFromBrandName } from '@/lib/scrapers/channels/shopify-finder';
 import { startJobLog, finishJobLog } from '@/lib/supervisor/job-logger';
 
+export const maxDuration = 120;
+
 /**
  * POST /api/discovery/shopify
  * Dual mode:
