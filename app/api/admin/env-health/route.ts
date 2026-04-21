@@ -186,6 +186,57 @@ export async function GET() {
       capability: '自动化任务归属用户',
       impact: '后台创建的数据没有归属',
     },
+
+    // ── Webhooks (signature verification) ──
+    {
+      key: 'SHOPIFY_WEBHOOK_SECRET',
+      required: false,
+      configured: !!process.env.SHOPIFY_WEBHOOK_SECRET,
+      capability: 'Shopify 联系表单 webhook 签名验证',
+      impact: '不配 = webhook 直接返回 503（防伪造）',
+      setup_url: 'https://shopify.dev/docs/apps/build/webhooks',
+    },
+
+    // ── Email sending identity ──
+    {
+      key: 'RESEND_SENDING_EMAIL',
+      required: false,
+      configured: !!process.env.RESEND_SENDING_EMAIL,
+      capability: '发信邮箱地址（必须是 Resend 已验证域名下）',
+      impact: '不配则使用代码默认值 alex@jojofashion.us',
+    },
+
+    // ── PhantomBuster social automation agents ──
+    {
+      key: 'PHANTOMBUSTER_IG_COMMENTER_AGENT_ID',
+      required: false,
+      configured: !!process.env.PHANTOMBUSTER_IG_COMMENTER_AGENT_ID,
+      capability: 'IG 评论自动执行（social-execute cron）',
+      impact: '队列里的 IG 评论不会真正发出去',
+      setup_url: 'https://phantombuster.com/automations/instagram/',
+    },
+    {
+      key: 'PHANTOMBUSTER_LINKEDIN_CONNECT_AGENT_ID',
+      required: false,
+      configured: !!process.env.PHANTOMBUSTER_LINKEDIN_CONNECT_AGENT_ID,
+      capability: 'LinkedIn 加好友自动执行',
+      impact: '队列里的 LinkedIn 连接请求不会发出',
+      setup_url: 'https://phantombuster.com/automations/linkedin/',
+    },
+    {
+      key: 'PHANTOMBUSTER_IG_DM_AGENT_ID',
+      required: false,
+      configured: !!process.env.PHANTOMBUSTER_IG_DM_AGENT_ID,
+      capability: 'IG 私信自动发送（可选）',
+      impact: '无影响（若未启用 DM 渠道）',
+    },
+    {
+      key: 'PHANTOMBUSTER_WARMUP_START_DATE',
+      required: false,
+      configured: !!process.env.PHANTOMBUSTER_WARMUP_START_DATE,
+      capability: '社媒账号养号渐进模式（14 天从 20% 升到 100%）',
+      impact: '不配 = 满速跑，新账号有封号风险',
+    },
   ];
 
   const critical_missing = checks.filter(c => c.required && !c.configured);
