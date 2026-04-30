@@ -48,6 +48,7 @@ export function getWarmupCaps(): WarmupCaps {
 
   const start = new Date(startStr);
   if (Number.isNaN(start.getTime())) {
+    console.error(`[warmup] Invalid PHANTOMBUSTER_WARMUP_START_DATE: "${startStr}" — falling back to full speed. Set it as YYYY-MM-DD.`);
     return buildCaps(1.0, 0, null);
   }
 

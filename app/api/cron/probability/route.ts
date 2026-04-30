@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { recalculateAllProbabilities } from '@/lib/growth/deal-probability';
 
+// Recalculates 50 leads with AI scoring per lead
+export const maxDuration = 120;
+
 /**
  * POST /api/cron/probability
  * Cron (every hour): recalculates deal probability for all active leads.

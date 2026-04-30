@@ -169,7 +169,7 @@ export async function analyzeWithAI(
       // Minimum 1024 tokens required for caching.
       const requestBody: any = {
         model,
-        max_tokens: options?.maxTokens ?? 1024,
+        max_tokens: options?.maxTokens ?? 2048,
         messages: [{ role: 'user', content: prompt }],
       };
 

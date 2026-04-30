@@ -13,4 +13,6 @@ export function getAnthropicClient(): Anthropic {
   return client;
 }
 
+// AI_MODEL env var lets you swap models per environment (e.g. haiku for dev, sonnet for prod).
+// To upgrade the default: set AI_MODEL=claude-sonnet-4-5 (or newer) in Vercel env vars.
 export const DEFAULT_MODEL = process.env.AI_MODEL || 'claude-sonnet-4-20250514';

@@ -3,6 +3,9 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { planEngagements } from '@/lib/social/engagement-planner';
 import { getWarmupCaps } from '@/lib/social/warmup';
 
+// AI content generation for up to 30 engagements/day
+export const maxDuration = 120;
+
 /**
  * POST /api/cron/social-engage
  * Cron endpoint (daily): selects leads for social engagement,

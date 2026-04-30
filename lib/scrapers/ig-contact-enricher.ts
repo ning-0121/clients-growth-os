@@ -11,10 +11,31 @@ import * as cheerio from 'cheerio';
  */
 
 const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+// False-positive file extensions that match the email regex
+const EMAIL_ASSET_EXTENSIONS = /\.(png|jpg|jpeg|gif|svg|webp|mp4|mov|css|js|json|xml|txt|pdf|zip)$/i;
+// Domains to ignore even if they pattern-match as email
+const EMAIL_IGNORED_DOMAINS = ['sentry.io', 'sentry-cdn.com', 'example.com', 'test.com', 'domain.com'];
+
 const PHONE_RE = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/g;
 const WHATSAPP_LINK_RE = /(?:wa\.me|api\.whatsapp\.com|whatsapp\.com\/send)(?:\/[^\s"'<>]*)?(?:\?[^"'<>\s]*)?/gi;
 
-const LINKTREE_HOSTS = ['linktr.ee', 'lnk.bio', 'beacons.ai', 'bio.link', 'allmylinks.com', 'tap.bio'];
+// Bio link aggregators — any host in this list will be scraped as a Linktree equivalent
+const LINKTREE_HOSTS = [
+  'linktr.ee', 'lnk.bio', 'beacons.ai', 'bio.link', 'allmylinks.com', 'tap.bio',
+  'solo.to', 'hoo.be', 'koji.to', 'snipfeed.co', 'campsite.bio', 'milkshake.app',
+  'later.com/linkinbio', 'linkin.bio',
+];
+
+function isValidEmail(e: string): boolean {
+  if (e.length > 80) return false;
+  if (EMAIL_ASSET_EXTENSIONS.test(e)) return false;
+  if (EMAIL_IGNORED_DOMAINS.some(d => e.endsWith(`@${d}`) || e.includes(`@${d}.`))) return false;
+  if (e.includes('instagram.com')) return false;
+  // Must have a real TLD (no single-char after last dot)
+  const tld = e.split('.').pop() || '';
+  if (tld.length < 2) return false;
+  return true;
+}
 
 export interface IgEnrichmentResult {
   handle: string;
@@ -141,9 +162,7 @@ export async function enrichInstagramContact(
 
     // Pull contacts straight from bio
     const bioEmails = bio.match(EMAIL_RE) || [];
-    bioEmails.forEach(e => {
-      if (!e.includes('instagram.com') && e.length < 80) result.emails.push(e.toLowerCase());
-    });
+    bioEmails.filter(isValidEmail).forEach(e => result.emails.push(e.toLowerCase()));
     const wa = extractWhatsappFromText(bio);
     result.whatsapp_numbers.push(...wa.numbers);
     result.whatsapp_links.push(...wa.links);
@@ -210,11 +229,7 @@ export async function enrichInstagramContact(
 
       // Emails (filter obvious assets)
       const emailMatches = text.match(EMAIL_RE) || [];
-      for (const e of emailMatches.slice(0, 20)) {
-        if (!e.endsWith('.png') && !e.endsWith('.jpg') && e.length < 80 && !e.includes('sentry.io')) {
-          result.emails.push(e.toLowerCase());
-        }
-      }
+      emailMatches.filter(isValidEmail).slice(0, 20).forEach(e => result.emails.push(e.toLowerCase()));
 
       // Phones
       const phoneMatches = text.match(PHONE_RE) || [];

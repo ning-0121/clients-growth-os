@@ -3,6 +3,9 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { runSelfEvolution } from '@/lib/scrapers/self-evolution';
 import { runWeeklyUpgrade } from '@/lib/scrapers/auto-upgrade';
 
+// GitHub scan + AI analysis can be slow on weekly runs
+export const maxDuration = 300;
+
 /**
  * POST /api/cron/evolve
  * Daily: GitHub scan for new tools

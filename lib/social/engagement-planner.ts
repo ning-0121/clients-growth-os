@@ -137,7 +137,7 @@ Respond with just the note text, no JSON, no quotes.`;
   try {
     const result = await analyzeWithAI(prompt, 'linkedin_note_generation', { leadId: lead.id });
     const cleaned = result.replace(/^["']|["']$/g, '').trim();
-    return cleaned.length > 0 && cleaned.length <= 300 ? cleaned : null;
+    return cleaned.length > 0 && cleaned.length <= 280 ? cleaned : null;
   } catch {
     return null;
   }

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 
+// Parallel health queries + AI anomaly detection
+export const maxDuration = 120;
+
 /**
  * /api/cron/supervisor — Hourly AI health check & auto-remediation.
  *

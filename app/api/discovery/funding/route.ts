@@ -4,6 +4,9 @@ import { requireAuth, getCurrentProfile } from '@/lib/auth';
 import { discoverFundedBrands } from '@/lib/scrapers/channels/funding-monitor';
 import { startJobLog, finishJobLog } from '@/lib/supervisor/job-logger';
 
+// Crawls Kickstarter/ProductHunt + resolves brand websites
+export const maxDuration = 120;
+
 export async function GET(request: Request) { return handle(request); }
 export async function POST(request: Request) { return handle(request); }
 

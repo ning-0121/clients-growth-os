@@ -142,7 +142,7 @@ export async function generateColdEmail(
       prompt,
       'cold_email_generation',
       validateEmail,
-      { leadId: lead.id }
+      { leadId: lead.id, maxTokens: 2048 }  // strategy + IG intel can push output >1024
     );
   } catch (err) {
     console.error(`[Outreach] Failed to generate email for lead ${lead.id}:`, err);

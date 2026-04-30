@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { processOutreachQueue } from '@/lib/outreach/sequence-engine';
 
+// AI email generation + Resend API calls for batch of 10
+export const maxDuration = 120;
+
 /**
  * POST /api/outreach/send
  * Cron endpoint: processes the outreach queue — generates AI emails and sends them.

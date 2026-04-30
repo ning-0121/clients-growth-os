@@ -34,7 +34,7 @@ export async function runRound4(
       prompt,
       'composite_scoring',
       validateCompositeScore,
-      { leadId: lead.id }
+      { leadId: lead.id, maxTokens: 1024 }  // structured JSON output, <1024 sufficient
     );
 
     // Determine new grade based on AI composite score

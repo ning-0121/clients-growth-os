@@ -14,14 +14,16 @@ interface SequenceStep {
  * These go to nobody in particular and get marked as spam.
  */
 const GENERIC_EMAIL_PREFIXES = [
-  'info', 'hello', 'hi', 'hey', 'contact', 'sales', 'support', 'help',
+  'info', 'hello', 'hi', 'hey', 'contact', 'support', 'help',
   'customerservice', 'service', 'care', 'team', 'admin', 'office',
   'noreply', 'no-reply', 'donotreply', 'do-not-reply',
   'mail', 'email', 'post', 'webmaster', 'feedback',
   'press', 'media', 'pr', 'marketing', 'orders', 'billing',
   'accounts', 'accounting', 'hr', 'jobs', 'careers', 'hiring',
   'legal', 'compliance', 'privacy', 'security',
-  'shop', 'store', 'wholesale', 'buy', 'purchasing',
+  'shop', 'store',
+  // NOTE: 'wholesale', 'buying', 'purchasing', 'sales' intentionally NOT blocked —
+  // these are B2B buyer-role emails and exactly who we want to reach for apparel sourcing.
 ];
 
 /**

@@ -3,6 +3,9 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { executeSocialEngagements } from '@/lib/social/phantombuster-executor';
 import { getWarmupCaps } from '@/lib/social/warmup';
 
+// PhantomBuster launches with 800ms spacing between calls
+export const maxDuration = 120;
+
 /**
  * POST /api/cron/social-execute
  * Drains the queued social_engagements table by launching PhantomBuster

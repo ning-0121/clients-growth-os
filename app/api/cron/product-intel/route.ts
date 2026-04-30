@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { runFullProductScan } from '@/lib/product-intel/trend-scanner';
 
+// Full product category scan with multiple API calls
+export const maxDuration = 300;
+
 /**
  * POST /api/cron/product-intel
  * Daily cron: scans product trends across all categories

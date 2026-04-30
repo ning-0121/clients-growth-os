@@ -7,6 +7,12 @@
 
 import { smartSearch } from '@/lib/scrapers/search-providers';
 
+// In-memory cache: prevents duplicate SerpAPI calls for the same handle
+// within a single serverless invocation (e.g. batch-processing 50 leads).
+// TTL = 4 hours (handles won't post that fast).
+const CACHE = new Map<string, { result: InstagramIntel; expiresAt: number }>();
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000;
+
 export interface InstagramPostRef {
   url: string;          // e.g. https://instagram.com/p/ABC123
   caption_snippet: string;
@@ -27,6 +33,10 @@ export interface InstagramIntel {
 export async function fetchInstagramIntel(handle: string, options: { maxPosts?: number } = {}): Promise<InstagramIntel> {
   const { maxPosts = 4 } = options;
   const cleaned = handle.replace('@', '').replace(/\/$/, '');
+
+  // Return cached result if fresh
+  const cached = CACHE.get(cleaned);
+  if (cached && cached.expiresAt > Date.now()) return cached.result;
 
   const intel: InstagramIntel = {
     handle: cleaned,
@@ -68,6 +78,8 @@ export async function fetchInstagramIntel(handle: string, options: { maxPosts?: 
     });
   }
 
+  // Store in cache before returning
+  CACHE.set(cleaned, { result: intel, expiresAt: Date.now() + CACHE_TTL_MS });
   return intel;
 }
 
