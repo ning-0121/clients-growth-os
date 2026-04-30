@@ -1,6 +1,7 @@
 import { analyzeStructured } from '@/lib/ai/ai-service';
 import { buildColdEmailPrompt, ColdEmailContext, EmailType } from '@/lib/ai/prompts';
 import { fetchInstagramIntel, formatIgIntelForPrompt } from './ig-intel';
+import { renderEmailHtml } from './email-template';
 
 export interface GeneratedEmail {
   subject: string;
@@ -17,7 +18,7 @@ function validateEmail(data: unknown): GeneratedEmail {
   return {
     subject: String(d.subject).slice(0, 200),
     body_text: String(d.body_text),
-    body_html: String(d.body_html || `<p>${String(d.body_text).replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`),
+    body_html: renderEmailHtml({ subject: String(d.subject), bodyText: String(d.body_text) }),
     angle_used: d.angle_used ? String(d.angle_used) : undefined,
   };
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
+import { notifySlack } from '@/lib/supervisor/slack-notify';
 
 // Parallel health queries + AI anomaly detection
 export const maxDuration = 120;
@@ -175,6 +176,13 @@ async function handleCron(request: Request) {
       const fresh = alerts.filter((a) => !typesToSuppress.has(a.alert_type));
       if (fresh.length > 0) {
         await supabase.from('supervisor_alerts').insert(fresh);
+
+        // Push critical alerts to Slack immediately (warning = DB only, no spam)
+        for (const alert of fresh) {
+          if (alert.severity === 'critical') {
+            await notifySlack(alert);
+          }
+        }
       }
     }
 

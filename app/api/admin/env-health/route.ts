@@ -237,6 +237,16 @@ export async function GET() {
       capability: '社媒账号养号渐进模式（14 天从 20% 升到 100%）',
       impact: '不配 = 满速跑，新账号有封号风险',
     },
+
+    // ── Notifications ──
+    {
+      key: 'SLACK_WEBHOOK_URL',
+      required: false,
+      configured: !!process.env.SLACK_WEBHOOK_URL,
+      capability: 'Supervisor 告警推送 Slack（low_throughput / high_error_rate）',
+      impact: '不配 = 系统异常只写 DB，不推送，需主动去看 dashboard',
+      setup_url: 'https://api.slack.com/messaging/webhooks',
+    },
   ];
 
   const critical_missing = checks.filter(c => c.required && !c.configured);
